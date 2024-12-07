@@ -1,156 +1,157 @@
 <script lang="ts">
-  import { invoke } from "@tauri-apps/api/core";
 
-  let name = $state("");
-  let greetMsg = $state("");
+import maplibregl from 'maplibre-gl';
+import { PMTiles, Protocol } from 'pmtiles';
+  import { onMount } from 'svelte';
 
-  async function greet(event: Event) {
-    event.preventDefault();
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    greetMsg = await invoke("greet", { name });
-  }
+  import { defaultTheme } from '../theme'
+  
+let { data }: { data: PageData } = $props();
+ 
+
+onMount(async () => {
+  const protocol = new Protocol();
+      maplibregl.addProtocol("pmtiles", (request) => {
+        return new Promise((resolve, reject) => {
+          const callback = (err: any, data: any) => {
+            if (err) {
+              reject(err);
+            } else {
+              resolve({ data });
+            }
+          };
+
+          protocol.tile(request, callback);
+        });
+      });
+
+      // the location of our pmtiles file
+      const PMTILES_URL = "./my_area.pmtiles";
+
+      // create a new PmTiles instance
+      const pmtilesInstance = new PMTiles(PMTILES_URL);
+
+      // this is so we share one instance across the JS code and the map renderer
+      protocol.add(pmtilesInstance);
+
+      // we first fetch the header so we can get the center lon, lat of the map.
+      const mapMetaData = await pmtilesInstance.getHeader();
+
+
+
+    
+    const all = await fetch('https://www.seismicportal.eu/fdsnws/event/1/query?limit=100&format=json')
+    .then(res => res.json())
+    .then(res => res.features)
+
+    console.log(all)
+
+
+
+
+
+
+    
+
+
+        const map = new maplibregl.Map({
+              container: 'map',
+              minZoom: 1.3,
+              maxZoom: 5,
+              center: [0, 0],
+              zoom: 0.2,
+              style: {
+                      version: 8,
+                      sprite: "https://demotiles.maplibre.org/styles/osm-bright-gl-style/sprite",
+                      // ading protomaps as the data source for our map
+                      sources: {
+                          'example-points': {
+                      type: 'geojson',
+                      data: {
+                          type: 'FeatureCollection',
+                          features: data.features,
+                            }
+                        },
+            
+                          'protomaps': {
+                              type: 'vector',
+                              url: `pmtiles://${PMTILES_URL}`,
+                              attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>'
+                          }
+                      },
+                       glyphs: 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
+                      // simple map layer definitions
+                      // for more information about structure see
+                      // https://maplibre.org/maplibre-style-spec/layers/
+                      layers: [...defaultTheme, 
+                      {
+                          id: "example-points-layer",
+                          type: "circle",
+                          source: "example-points",
+                          paint: {
+                            "circle-radius": 5,
+                            "circle-color": "#ff5722",
+                          },
+                        },
+                      ]
+                  
+                  }
+          });
+
+  
+
+
+
+          map.on('load',async () => {
+            const image = await map.loadImage('https://upload.wikimedia.org/wikipedia/commons/7/7c/201408_cat.png');
+            map.addImage('marker-15', image.data);
+
+
+            console.log(map)
+          })
+
+
+          map.on('click', 'example-points-layer', (e) => {
+            const coordinates = e.features[0]!.geometry.coordinates.slice();
+            const description = e.features[0]!.properties.description;
+
+            // Ensure that if the map is zoomed out such that multiple
+            // copies of the feature are visible, the popup appears
+            // over the copy being pointed to.
+            while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) {
+                coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
+            }
+
+            new maplibregl.Popup()
+                .setLngLat(coordinates)
+                .setHTML(description)
+                .addTo(map);
+        });
+
+        // Change the cursor to a pointer when the mouse is over the places layer.
+        map.on('mouseenter', 'example-points-layer', () => {
+            map.getCanvas().style.cursor = 'pointer';
+        });
+
+        // Change it back to a pointer when it leaves.
+        map.on('mouseleave', 'example-points-layer', () => {
+            map.getCanvas().style.cursor = '';
+        });
+
+      
+
+
+
+        // console.debug(map.styles.features)
+
+        // map.on('')  
+})
+
+
+
 </script>
 
-<main class="container">
-  <h1>Welcome to Tauri + Svelte</h1>
 
-  <div class="row">
-    <a href="https://vitejs.dev" target="_blank">
-      <img src="/vite.svg" class="logo vite" alt="Vite Logo" />
-    </a>
-    <a href="https://tauri.app" target="_blank">
-      <img src="/tauri.svg" class="logo tauri" alt="Tauri Logo" />
-    </a>
-    <a href="https://kit.svelte.dev" target="_blank">
-      <img src="/svelte.svg" class="logo svelte-kit" alt="SvelteKit Logo" />
-    </a>
-  </div>
-  <p>Click on the Tauri, Vite, and SvelteKit logos to learn more.</p>
+<div id="map"></div>
 
-  <form class="row" onsubmit={greet}>
-    <input id="greet-input" placeholder="Enter a name..." bind:value={name} />
-    <button type="submit">Greet</button>
-  </form>
-  <p>{greetMsg}</p>
-</main>
 
-<style>
-.logo.vite:hover {
-  filter: drop-shadow(0 0 2em #747bff);
-}
-
-.logo.svelte-kit:hover {
-  filter: drop-shadow(0 0 2em #ff3e00);
-}
-
-:root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 400;
-
-  color: #0f0f0f;
-  background-color: #f6f6f6;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
-}
-
-.container {
-  margin: 0;
-  padding-top: 10vh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  text-align: center;
-}
-
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: 0.75s;
-}
-
-.logo.tauri:hover {
-  filter: drop-shadow(0 0 2em #24c8db);
-}
-
-.row {
-  display: flex;
-  justify-content: center;
-}
-
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-
-a:hover {
-  color: #535bf2;
-}
-
-h1 {
-  text-align: center;
-}
-
-input,
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  color: #0f0f0f;
-  background-color: #ffffff;
-  transition: border-color 0.25s;
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
-}
-
-button {
-  cursor: pointer;
-}
-
-button:hover {
-  border-color: #396cd8;
-}
-button:active {
-  border-color: #396cd8;
-  background-color: #e8e8e8;
-}
-
-input,
-button {
-  outline: none;
-}
-
-#greet-input {
-  margin-right: 5px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
-  }
-
-  a:hover {
-    color: #24c8db;
-  }
-
-  input,
-  button {
-    color: #ffffff;
-    background-color: #0f0f0f98;
-  }
-  button:active {
-    background-color: #0f0f0f69;
-  }
-}
-
-</style>
