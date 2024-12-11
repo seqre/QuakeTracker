@@ -1,9 +1,8 @@
 mod seismic;
 
 use std::error::Error;
+
 use tauri::{App, Runtime};
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-use tauri_plugin_log::{Target, TargetKind};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
