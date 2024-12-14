@@ -2,9 +2,11 @@ use geojson::de::deserialize_geometry;
 use geojson::ser::serialize_geometry;
 use serde::{Deserialize, Serialize};
 
+// Generated from: https://www.emsc-csem.org/Files/epos/specifications/Specs_fdsnevent-WS.pdf
+
 /// Main event feature representing an earthquake event
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Feature {
+pub struct SeismicEvent {
     #[serde(
         serialize_with = "serialize_geometry",
         deserialize_with = "deserialize_geometry"
@@ -172,7 +174,7 @@ pub struct StamagObject {
 }
 
 mod test {
-    use crate::seismic::Feature;
+    use super::SeismicEvent;
 
     const EXAMPLE_JSON: &'static str = r##"
     {
@@ -241,7 +243,7 @@ mod test {
 
     #[test]
     fn check_deserialize() {
-        let feature_collection: Vec<Feature> =
+        let feature_collection: Vec<SeismicEvent> =
             geojson::de::deserialize_feature_collection_str_to_vec(&EXAMPLE_JSON).unwrap();
         assert_eq!(feature_collection.len(), 2);
         assert_eq!(feature_collection[0].id, String::from("20241210_0000315"));

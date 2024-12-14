@@ -8,7 +8,6 @@
 
     let {data}: { data: PageData } = $props();
 
-
     onMount(async () => {
         const protocol = new Protocol();
         maplibregl.addProtocol("pmtiles", (request) => {
@@ -36,13 +35,6 @@
 
         // we first fetch the header so we can get the center lon, lat of the map.
         const mapMetaData = await pmtilesInstance.getHeader();
-
-
-        const all = await fetch('https://www.seismicportal.eu/fdsnws/event/1/query?limit=100&format=json')
-            .then(res => res.json())
-            .then(res => res.features)
-
-        console.log(all)
 
 
         const map = new maplibregl.Map({

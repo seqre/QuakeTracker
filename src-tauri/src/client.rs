@@ -1,0 +1,187 @@
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use {reqwest, thiserror};
+
+static SEISMIC_URL: &str = "https://www.seismicportal.eu/fdsnws/event/1/query";
+
+#[derive(Debug, Serialize, thiserror::Error)]
+pub enum Error {
+    #[error("provided query is incorrect: `{0}`")]
+    Validation(String),
+    #[error("network connection error: `{0}`")]
+    Network(String),
+    #[error("could not deserialize response: `{0}`")]
+    Deserialization(String),
+}
+
+#[tauri::command]
+pub async fn get_seismic_events(query_params: QueryParams) -> Result<tauri::ipc::Response, Error> {
+    query_params.validate()?;
+
+    let response = reqwest::Client::new()
+        .get(SEISMIC_URL)
+        .query(&query_params)
+        .send()
+        .await
+        .map_err(|e| Error::Network(e.to_string()))?;
+
+    let events = response
+        .text()
+        .await
+        .map_err(|e| Error::Network(e.to_string()))?;
+
+    Ok(tauri::ipc::Response::new(events))
+}
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TimeConstraints {
+    /// The start time of the query, in UTC format
+    #[serde(rename = "start", skip_serializing_if = "Option::is_none")]
+    pub start_time: Option<DateTime<Utc>>,
+    /// The end time of the query, in UTC format
+    #[serde(rename = "end", skip_serializing_if = "Option::is_none")]
+    pub end_time: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BoxAreaConstraints {
+    /// The minimum latitude of the bounding box, in degrees
+    #[serde(rename = "minlat", skip_serializing_if = "Option::is_none")]
+    pub min_latitude: Option<f32>,
+    /// The maximum latitude of the bounding box, in degrees
+    #[serde(rename = "maxlat", skip_serializing_if = "Option::is_none")]
+    pub max_latitude: Option<f32>,
+    /// The minimum longitude of the bounding box, in degrees
+    #[serde(rename = "minlon", skip_serializing_if = "Option::is_none")]
+    pub min_longitude: Option<f32>,
+    /// The maximum longitude of the bounding box, in degrees
+    #[serde(rename = "maxlon", skip_serializing_if = "Option::is_none")]
+    pub max_longitude: Option<f32>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CircleConstraints {
+    /// The latitude of the center of the circle, in degrees
+    #[serde(rename = "lat", skip_serializing_if = "Option::is_none")]
+    pub latitude: Option<f32>,
+    /// The longitude of the center of the circle, in degrees
+    #[serde(rename = "lon", skip_serializing_if = "Option::is_none")]
+    pub longitude: Option<f32>,
+    /// The minimum radius of the circle, in meters
+    #[serde(rename = "minrad", skip_serializing_if = "Option::is_none")]
+    pub min_radius: Option<f32>,
+    /// The maximum radius of the circle, in meters
+    #[serde(rename = "maxrad", skip_serializing_if = "Option::is_none")]
+    pub max_radius: Option<f32>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct OutputControl {
+    /// The format of the output
+    #[serde(rename = "format", default = "_get_json")]
+    format: String,
+    /// The HTTP status code to use for missing data
+    #[serde(rename = "nodata", default = "_get_204")]
+    no_data: String,
+}
+
+fn _get_json() -> String {
+    "json".to_string()
+}
+
+fn _get_204() -> String {
+    "204".to_string()
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OtherParameters {
+    /// The minimum depth to include, in kilometers
+    #[serde(rename = "mindepth", skip_serializing_if = "Option::is_none")]
+    pub min_depth: Option<f32>,
+    /// The maximum depth to include, in kilometers
+    #[serde(rename = "maxdepth", skip_serializing_if = "Option::is_none")]
+    pub max_depth: Option<f32>,
+    /// The minimum magnitude to include
+    #[serde(rename = "minmag", skip_serializing_if = "Option::is_none")]
+    pub min_magnitude: Option<f32>,
+    /// The maximum magnitude to include
+    #[serde(rename = "maxmag", skip_serializing_if = "Option::is_none")]
+    pub max_magnitude: Option<f32>,
+    /// The type of magnitude to use, e.g. "Mw", "ML", "mb"
+    #[serde(rename = "magnitudetype", skip_serializing_if = "Option::is_none")]
+    pub magnitude_type: Option<String>,
+    /// Whether to include all event origins
+    #[serde(rename = "includeallorigns", skip_serializing_if = "Option::is_none")]
+    pub include_all_orgins: Option<bool>,
+    /// Whether to include arrival information
+    #[serde(rename = "includearrivals", skip_serializing_if = "Option::is_none")]
+    pub include_arrivals: Option<bool>,
+    /// The ID of the event to include
+    #[serde(rename = "eventid", skip_serializing_if = "Option::is_none")]
+    pub event_id: Option<String>,
+    /// The maximum number of results to return
+    #[serde(rename = "limit", default)]
+    pub limit: Limit,
+    /// The number of results to skip
+    #[serde(rename = "offset", skip_serializing_if = "Option::is_none")]
+    pub offset: Option<i32>,
+    /// The field(s) to order the results by
+    // time, time-asc, magnitude, magnitude-asc
+    #[serde(rename = "orderby", skip_serializing_if = "Option::is_none")]
+    pub order_by: Option<String>,
+    /// The contributor of the data
+    #[serde(rename = "contributor", skip_serializing_if = "Option::is_none")]
+    pub contributor: Option<String>,
+    /// The data catalog to search
+    #[serde(rename = "catalog", skip_serializing_if = "Option::is_none")]
+    pub catalog: Option<String>,
+    /// The date and time after which to include updated data
+    #[serde(rename = "updatedafter", skip_serializing_if = "Option::is_none")]
+    pub updated_after: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Limit(i32);
+
+impl Default for Limit {
+    fn default() -> Self {
+        Limit(10)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct QueryParams {
+    #[serde(flatten)]
+    pub time_constraints: TimeConstraints,
+    #[serde(flatten)]
+    pub box_area_constraints: BoxAreaConstraints,
+    #[serde(flatten)]
+    pub circle_constraints: CircleConstraints,
+    #[serde(flatten, default)]
+    output_control: OutputControl,
+    #[serde(flatten)]
+    pub other_parameters: OtherParameters,
+}
+
+impl QueryParams {
+    pub fn validate(&self) -> Result<(), Error> {
+        Ok(())
+    }
+}
+
+mod test {
+    use super::QueryParams;
+
+    #[test]
+    fn get_empty_query() {
+        let query = "{}";
+
+        let params = serde_json::from_str::<QueryParams>(query).unwrap();
+        let serialized = serde_json::to_string(&params).unwrap();
+
+        assert_eq!(
+            serialized,
+            "{\"format\":\"json\",\"nodata\":\"204\",\"limit\":10}"
+        )
+    }
+}
