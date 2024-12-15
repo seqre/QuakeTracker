@@ -5,6 +5,7 @@
     import {onMount} from 'svelte';
 
     import {defaultTheme} from '../theme'
+  import { type PageData } from './$types';
 
     let {data}: { data: PageData } = $props();
 
@@ -72,9 +73,18 @@
                         type: "circle",
                         source: "example-points",
                         paint: {
-                            "circle-radius": 5,
-                            "circle-color": "#ff5722",
-                        },
+      "circle-radius": 5,
+      "circle-color": [
+        "interpolate-hcl",
+        ["linear"], // Specify a linear interpolation
+        ["get", "mag"], // Use the `mag` property to interpolate
+        0, "green", // `mag` = 0 -> green
+        5, "yellow", // `mag` = 5 -> yellow
+        10, "red" // `mag` = 10 -> red
+      ],
+      "circle-stroke-color": "gray",
+      "circle-stroke-width": 1,
+    },
                     },
                 ]
 
@@ -92,8 +102,12 @@
 
 
         map.on('click', 'example-points-layer', (e) => {
+            // @ts-ignore
             const coordinates = e.features[0]!.geometry.coordinates.slice();
-            const description = e.features[0]!.properties.description;
+            const description = e.features![0]!.properties;
+
+            // @ts-ignore
+            console.log(e.features[0]!)
 
             // Ensure that if the map is zoomed out such that multiple
             // copies of the feature are visible, the popup appears
@@ -104,7 +118,12 @@
 
             new maplibregl.Popup()
                 .setLngLat(coordinates)
-                .setHTML(description)
+                .setHTML(`
+                <p>Region: ${description.flynn_region}<p/>
+                <p>Last Update: ${description.lastupdate}</p>
+                <p>Mag: ${description.mag}<p>
+                
+                `)
                 .addTo(map);
         });
 
@@ -129,5 +148,4 @@
 
 
 <div id="map"></div>
-
 
