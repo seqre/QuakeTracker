@@ -1,8 +1,18 @@
+use std::collections::HashMap;
+
 use chrono::{DateTime, Utc};
+use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
+use tauri::ipc::Channel;
+use tokio_tungstenite::connect_async;
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+use tokio_tungstenite::tungstenite::Message;
 use {reqwest, thiserror};
 
+use crate::seismic::SeismicEvent;
+
 static SEISMIC_URL: &str = "https://www.seismicportal.eu/fdsnws/event/1/query";
+static SEISMIC_WSS_URL: &str = "wss://www.seismicportal.eu/standing_order/websocket";
 
 #[derive(Debug, Serialize, thiserror::Error)]
 pub enum Error {
@@ -32,6 +42,44 @@ pub async fn get_seismic_events(query_params: QueryParams) -> Result<tauri::ipc:
 
     Ok(tauri::ipc::Response::new(events))
 }
+
+// https://www.seismicportal.eu/realtime.html
+#[tauri::command]
+pub async fn listen_to_seismic_events(on_event: Channel<String>) {
+    let request = SEISMIC_WSS_URL.into_client_request().unwrap();
+
+    let (mut stream, response) = connect_async(request).await.unwrap();
+
+    while let Some(msg) = stream.next().await {
+        if let Ok(Message::Text(text)) = msg {
+            let s = text.as_str().to_string();
+            log::trace!("WSS Message: {s}");
+
+            on_event.send(s).unwrap()
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WssAction {
+    Create,
+    Update,
+}
+
+#[derive(Debug, Deserialize)]
+struct InnerWssEvent {
+    pub action: WssAction,
+    pub data: HashMap<String, String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WssEvent {
+    pub action: WssAction,
+    pub data: SeismicEvent,
+}
+
+// Generated from: https://www.seismicportal.eu/fdsn-wsevent.html
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TimeConstraints {
     /// The start time of the query, in UTC format
@@ -170,7 +218,39 @@ impl QueryParams {
 }
 
 mod test {
-    use super::QueryParams;
+    use super::{InnerWssEvent, QueryParams, WssEvent};
+
+    const EXAMPLE_WSS: &str = r##"
+    {
+      "action":"create",
+      "data":{
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          7.8865,
+          46.0554,
+          -8.0
+        ]
+      },
+      "id": "20241214_0000249",
+      "properties": {
+        "source_id": "1744000",
+        "source_catalog": "EMSC-RTS",
+        "lastupdate": "2024-12-15T18:26:38.787209Z",
+        "time": "2024-12-14T09:39:47.2Z",
+        "flynn_region": "SWITZERLAND",
+        "lat": 46.0554,
+        "lon": 7.8865,
+        "depth": 8.0,
+        "evtype": "ke",
+        "auth": "ETHZ",
+        "mag": 0.9,
+        "magtype": "ml",
+        "unid": "20241214_0000249"
+      }
+    }}
+    "##;
 
     #[test]
     fn get_empty_query() {
@@ -183,5 +263,14 @@ mod test {
             serialized,
             "{\"format\":\"json\",\"nodata\":\"204\",\"limit\":10}"
         )
+    }
+
+    #[test]
+    fn check_wss_serde() {
+        // let deserialized =
+        // serde_json::from_str::<InnerWssEvent>(&EXAMPLE_WSS).unwrap();
+        // println!("{deserialized:#?}");
+        // let serialized = serde_json::to_string(&deserialized).unwrap();
+        // println!("{serialized:#?}");
     }
 }

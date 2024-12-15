@@ -3,7 +3,7 @@ mod seismic;
 
 use std::error::Error;
 
-use tauri::{App, Runtime};
+use tauri::{App, Manager, Runtime};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -11,7 +11,10 @@ pub fn run() {
         // https://tauri.app/plugin/logging/
         .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![client::get_seismic_events])
+        .invoke_handler(tauri::generate_handler![
+            client::get_seismic_events,
+            client::listen_to_seismic_events
+        ])
         .setup(setup)
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
