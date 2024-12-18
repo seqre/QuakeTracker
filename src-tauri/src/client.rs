@@ -1,7 +1,6 @@
-use std::collections::HashMap;
-
 use chrono::{DateTime, Utc};
 use futures_util::StreamExt;
+use geojson::JsonValue;
 use serde::{Deserialize, Serialize};
 use tauri::ipc::Channel;
 use tokio_tungstenite::connect_async;
@@ -45,38 +44,50 @@ pub async fn get_seismic_events(query_params: QueryParams) -> Result<tauri::ipc:
 
 // https://www.seismicportal.eu/realtime.html
 #[tauri::command]
-pub async fn listen_to_seismic_events(on_event: Channel<String>) {
+pub async fn listen_to_seismic_events(on_event: Channel<WssEvent>) {
     let request = SEISMIC_WSS_URL.into_client_request().unwrap();
 
-    let (mut stream, response) = connect_async(request).await.unwrap();
+    let (mut stream, _response) = connect_async(request).await.unwrap();
 
     while let Some(msg) = stream.next().await {
         if let Ok(Message::Text(text)) = msg {
-            let s = text.as_str().to_string();
-            log::trace!("WSS Message: {s}");
+            let s = serde_json::from_str(text.as_str()).unwrap();
+            log::trace!("WSS Message: {s:?}");
 
             on_event.send(s).unwrap()
         }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum WssAction {
     Create,
     Update,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct InnerWssEvent {
     pub action: WssAction,
-    pub data: HashMap<String, String>,
+    pub data: JsonValue,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(from = "InnerWssEvent", rename_all(serialize = "camelCase"))]
 pub struct WssEvent {
     pub action: WssAction,
     pub data: SeismicEvent,
+}
+
+impl From<InnerWssEvent> for WssEvent {
+    fn from(inner: InnerWssEvent) -> Self {
+        let reader = inner.data.to_string();
+        let event = geojson::de::deserialize_single_feature(reader.as_bytes()).unwrap();
+        WssEvent {
+            action: inner.action,
+            data: event,
+        }
+    }
 }
 
 // Generated from: https://www.seismicportal.eu/fdsn-wsevent.html
@@ -218,7 +229,7 @@ impl QueryParams {
 }
 
 mod test {
-    use super::{InnerWssEvent, QueryParams, WssEvent};
+    use super::{InnerWssEvent, QueryParams, WssAction, WssEvent};
 
     const EXAMPLE_WSS: &str = r##"
     {
@@ -267,10 +278,7 @@ mod test {
 
     #[test]
     fn check_wss_serde() {
-        // let deserialized =
-        // serde_json::from_str::<InnerWssEvent>(&EXAMPLE_WSS).unwrap();
-        // println!("{deserialized:#?}");
-        // let serialized = serde_json::to_string(&deserialized).unwrap();
-        // println!("{serialized:#?}");
+        let deserialized = serde_json::from_str::<WssEvent>(&EXAMPLE_WSS).unwrap();
+        assert_eq!(deserialized.action, WssAction::Create);
     }
 }

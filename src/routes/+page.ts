@@ -6,13 +6,6 @@ export const load: PageLoad = async ({params}) => {
     // @ts-ignore
     console.log(window.__TAURI_INTERNALS__);
 
-    //TODO: replace string with predefined struct
-    const onEvent = new Channel<string>();
-    onEvent.onmessage = (message) => {
-        console.info(message)
-    }
-    await invoke("listen_to_seismic_events", {onEvent});
-
     if (isTauri())
         return {
             features: await invoke("get_seismic_events", {

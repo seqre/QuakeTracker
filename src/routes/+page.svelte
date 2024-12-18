@@ -5,7 +5,9 @@
     import {onMount} from 'svelte';
 
     import {defaultTheme} from '../theme'
-  import { type PageData } from './$types';
+    import {type PageData} from './$types';
+    import {Channel, invoke} from "@tauri-apps/api/core";
+    import {info} from "@tauri-apps/plugin-log";
 
     let {data}: { data: PageData } = $props();
 
@@ -73,18 +75,18 @@
                         type: "circle",
                         source: "example-points",
                         paint: {
-      "circle-radius": 5,
-      "circle-color": [
-        "interpolate-hcl",
-        ["linear"], // Specify a linear interpolation
-        ["get", "mag"], // Use the `mag` property to interpolate
-        0, "green", // `mag` = 0 -> green
-        5, "yellow", // `mag` = 5 -> yellow
-        10, "red" // `mag` = 10 -> red
-      ],
-      "circle-stroke-color": "gray",
-      "circle-stroke-width": 1,
-    },
+                            "circle-radius": 5,
+                            "circle-color": [
+                                "interpolate-hcl",
+                                ["linear"], // Specify a linear interpolation
+                                ["get", "mag"], // Use the `mag` property to interpolate
+                                0, "green", // `mag` = 0 -> green
+                                5, "yellow", // `mag` = 5 -> yellow
+                                10, "red" // `mag` = 10 -> red
+                            ],
+                            "circle-stroke-color": "gray",
+                            "circle-stroke-width": 1,
+                        },
                     },
                 ]
 
@@ -140,7 +142,33 @@
 
         // console.debug(map.styles.features)
 
-        // map.on('')  
+        // map.on('')
+
+        type WssEvent = {
+            action: 'create' | 'update';
+            data: object;
+        };
+
+        const onEvent = new Channel<WssEvent>();
+        onEvent.onmessage = (message) => {
+            const sourceData = map.getSource('example-points').serialize();
+
+            const newPoint = {
+                type: 'Feature',
+                geometry: message.data.geometry,
+                properties: message.data,
+            };
+
+            sourceData.data.features.push(newPoint);
+
+            map.getSource('example-points').setData(sourceData.data);
+
+            map.flyTo({
+                center: newPoint.geometry.coordinates,
+                speed: 0.5
+            })
+        }
+        await invoke("listen_to_seismic_events", {onEvent});
     })
 
 

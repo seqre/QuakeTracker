@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 // Generated from: https://www.emsc-csem.org/Files/epos/specifications/Specs_fdsnevent-WS.pdf
 
 /// Main event feature representing an earthquake event
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SeismicEvent {
     #[serde(
         serialize_with = "serialize_geometry",
@@ -43,7 +43,7 @@ pub struct SeismicEvent {
     pub arrivals: Option<Vec<Arrival>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OriginCollection {
     #[serde(
         serialize_with = "serialize_geometry",
@@ -55,7 +55,7 @@ pub struct OriginCollection {
 }
 
 /// Origin object representing details of the earthquake origin
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Origin {
     #[serde(rename = "Source_id")]
     pub source_id: String,
@@ -106,7 +106,7 @@ pub struct Origin {
 }
 
 /// Magnitude object representing earthquake magnitude details
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Magnitude {
     #[serde(rename = "Value")]
     pub value: f64,
@@ -121,7 +121,7 @@ pub struct Magnitude {
 }
 
 /// Arrival object representing seismic wave arrival details
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Arrival {
     #[serde(rename = "id")]
     pub id: String,
@@ -168,7 +168,7 @@ pub struct Arrival {
 }
 
 /// Stamag object (not detailed in the specification, added as a placeholder)
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StamagObject {
     // Placeholder for potential fields
 }
