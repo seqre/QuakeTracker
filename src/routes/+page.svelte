@@ -9,7 +9,17 @@
     import {Channel, invoke} from "@tauri-apps/api/core";
     import {info} from "@tauri-apps/plugin-log";
 
+    import '../app.css'
+  import NewPoint from '../components/NewPoint.svelte';
+  import { Activity, X } from 'lucide-svelte';
+
+
     let {data}: { data: PageData } = $props();
+
+    let sidebar = $state(false)
+
+
+    let realtime: Array<PointData> = $state([])
 
     onMount(async () => {
         const protocol = new Protocol();
@@ -108,8 +118,6 @@
             const coordinates = e.features[0]!.geometry.coordinates.slice();
             const description = e.features![0]!.properties;
 
-            // @ts-ignore
-            console.log(e.features[0]!)
 
             // Ensure that if the map is zoomed out such that multiple
             // copies of the feature are visible, the popup appears
@@ -146,7 +154,7 @@
 
         type WssEvent = {
             action: 'create' | 'update';
-            data: object;
+            data: PointData;
         };
 
         const onEvent = new Channel<WssEvent>();
@@ -158,6 +166,12 @@
                 geometry: message.data.geometry,
                 properties: message.data,
             };
+
+            realtime.push(message.data)
+
+            console.log(message)
+
+            console.log(realtime)
 
             sourceData.data.features.push(newPoint);
 
@@ -172,8 +186,31 @@
     })
 
 
+    let test = '{"geometry":{"coordinates":[-111.3665,45.9583],"type":"Point"},"source_id":"1747322","source_catalog":"EMSC-RTS","lastupdate":"2024-12-23T20:50:05.790919Z","time":"2024-12-23T19:22:40.77Z","lat":45.9583,"lon":-111.3665,"depth":2.4,"evtype":"ke","auth":"MB","mag":2.1,"magtype":"ml","flynn_region":"WESTERN MONTANA","unid":"20241223_0000210","origins":null,"arrivals":null}'
+
 </script>
 
 
 <div id="map"></div>
 
+<div class="fixed top-0 left-0 m-4">
+    <button onclick={() => sidebar = !sidebar} class="p-2 rounded bg-white shadow-lg">
+        <Activity/>
+    </button>
+</div>
+
+{#if sidebar}
+    <aside class="pt-5 h-full fixed bg-white left-0 top-0 z-50 shadow-lg">
+
+        <button onclick={() => sidebar = !sidebar} class="absolute right-3 top-2"> 
+            <X/>
+        </button>
+
+        <NewPoint pointData={JSON.parse(test)}></NewPoint>
+
+        {#each realtime as real, index}
+            <!-- {JSON.stringify(real) as unknown as PointData} -->
+            <NewPoint pointData={real}></NewPoint>
+        {/each}
+    </aside>
+{/if}
