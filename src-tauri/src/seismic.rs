@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use geojson::de::deserialize_geometry;
 use geojson::ser::serialize_geometry;
 use serde::{Deserialize, Serialize};
@@ -17,9 +18,9 @@ pub struct SeismicEvent {
     #[serde(rename = "source_catalog")]
     pub source_catalog: String,
     #[serde(rename = "lastupdate")]
-    pub last_update: String,
+    pub last_update: DateTime<Utc>,
     #[serde(rename = "time")]
-    pub time: String,
+    pub time: DateTime<Utc>,
     #[serde(rename = "lat")]
     pub latitude: f64,
     #[serde(rename = "lon")]
@@ -62,9 +63,9 @@ pub struct Origin {
     #[serde(rename = "Source_catalog")]
     pub source_catalog: String,
     #[serde(rename = "Lastupdate")]
-    pub last_update: String,
+    pub last_update: DateTime<Utc>,
     #[serde(rename = "Time")]
-    pub time: String,
+    pub time: DateTime<Utc>,
     #[serde(rename = "Lat")]
     pub latitude: f64,
     #[serde(rename = "Lon")]
@@ -174,13 +175,15 @@ pub struct StamagObject {
 }
 
 mod test {
+    use chrono::{DateTime, NaiveDate, Utc};
+
     use super::SeismicEvent;
 
     const EXAMPLE_JSON: &'static str = r##"
     {
       "type": "FeatureCollection",
       "metadata": {
-        "count": 10
+        "count": 2
       },
       "features": [
         {
@@ -239,7 +242,17 @@ mod test {
         }
       ]
     }
+    }
     "##;
+
+    // "2024-12-10T22:28:31.49Z"
+    const FIRST_DATE: DateTime<Utc> = DateTime::from_naive_utc_and_offset(
+        NaiveDate::from_ymd_opt(2024, 12, 10)
+            .unwrap()
+            .and_hms_milli_opt(22, 28, 31, 490)
+            .unwrap(),
+        Utc,
+    );
 
     #[test]
     fn check_deserialize() {
@@ -247,6 +260,7 @@ mod test {
             geojson::de::deserialize_feature_collection_str_to_vec(&EXAMPLE_JSON).unwrap();
         assert_eq!(feature_collection.len(), 2);
         assert_eq!(feature_collection[0].id, String::from("20241210_0000315"));
+        assert_eq!(feature_collection[0].time, FIRST_DATE);
         assert!(feature_collection[1].origins.is_none());
     }
 }
