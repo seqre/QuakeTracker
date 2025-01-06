@@ -36,7 +36,7 @@ pub async fn get_seismic_events(
     Ok(tauri::ipc::Response::new(events))
 }
 
-pub async fn get_seismic_events_internal(
+async fn get_seismic_events_internal(
     state: &AppState,
     query_params: QueryParams,
 ) -> Result<String, Error> {

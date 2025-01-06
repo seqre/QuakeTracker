@@ -1,3 +1,4 @@
+mod analytics;
 mod client;
 mod seismic;
 mod state;
@@ -17,7 +18,8 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             client::get_seismic_events,
-            client::listen_to_seismic_events
+            client::listen_to_seismic_events,
+            analytics::get_magnitude_distribution
         ])
         .setup(setup)
         .run(tauri::generate_context!())

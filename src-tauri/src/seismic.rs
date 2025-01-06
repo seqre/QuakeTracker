@@ -1,3 +1,5 @@
+use std::io::Cursor;
+
 use chrono::{DateTime, Utc};
 use geojson::de::deserialize_geometry;
 use geojson::ser::serialize_geometry;
@@ -42,6 +44,44 @@ pub struct SeismicEvent {
     pub origins: Option<OriginCollection>,
     #[serde(default)]
     pub arrivals: Option<Vec<Arrival>>,
+}
+
+impl SeismicEvent {
+    pub(crate) fn test_event() -> Self {
+        let js = r##"
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -155.4875,
+              18.8232,
+              -16.1
+            ]
+          },
+          "id": "20241210_0000315",
+          "properties": {
+            "source_id": "1741830",
+            "source_catalog": "EMSC-RTS",
+            "lastupdate": "2024-12-10T22:30:25.164009Z",
+            "time": "2024-12-10T22:28:31.49Z",
+            "flynn_region": "HAWAII REGION, HAWAII",
+            "lat": 18.8232,
+            "lon": -155.4875,
+            "depth": 16.1,
+            "evtype": "ke",
+            "auth": "HV",
+            "mag": 2,
+            "magtype": "md",
+            "unid": "20241210_0000315"
+          }
+        }
+        "##;
+
+        let cursor = Cursor::new(js);
+
+        geojson::de::deserialize_single_feature(cursor).unwrap()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
