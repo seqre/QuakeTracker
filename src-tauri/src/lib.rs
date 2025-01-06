@@ -3,9 +3,9 @@ mod seismic;
 mod state;
 
 use std::error::Error;
+use std::sync::Mutex;
 
 use state::SeismicData;
-use tauri::async_runtime::Mutex;
 use tauri::{App, Manager, Runtime};
 pub type AppState = Mutex<SeismicData>;
 

@@ -57,7 +57,7 @@ pub async fn get_seismic_events_internal(
     let parsed: Vec<SeismicEvent> = geojson::de::deserialize_feature_collection_str_to_vec(&events)
         .map_err(|e| Error::Deserialization(e.to_string()))?;
 
-    let mut state = state.lock().await;
+    let mut state = state.lock().unwrap();
     state.add_events(parsed);
 
     Ok(events)
@@ -78,7 +78,7 @@ pub async fn listen_to_seismic_events(
             let wss_event: WssEvent = serde_json::from_str(text.as_str()).unwrap();
             log::trace!("WSS Message: {wss_event:?}");
 
-            let mut state = state.lock().await;
+            let mut state = state.lock().unwrap();
             state.add_or_update_event(wss_event.data.clone());
 
             if let Err(e) = on_event.send(wss_event) {
