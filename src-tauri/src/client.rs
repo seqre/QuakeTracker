@@ -25,6 +25,11 @@ pub enum Error {
 
 #[tauri::command]
 pub async fn get_seismic_events(query_params: QueryParams) -> Result<tauri::ipc::Response, Error> {
+    let events = get_seismic_events_internal(query_params).await?;
+    Ok(tauri::ipc::Response::new(events))
+}
+
+pub async fn get_seismic_events_internal(query_params: QueryParams) -> Result<String, Error> {
     query_params.validate()?;
 
     let response = reqwest::Client::new()
@@ -39,7 +44,7 @@ pub async fn get_seismic_events(query_params: QueryParams) -> Result<tauri::ipc:
         .await
         .map_err(|e| Error::Network(e.to_string()))?;
 
-    Ok(tauri::ipc::Response::new(events))
+    Ok(events)
 }
 
 // https://www.seismicportal.eu/realtime.html
