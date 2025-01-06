@@ -9,7 +9,8 @@ use tokio_tungstenite::tungstenite::Message;
 use {reqwest, thiserror};
 
 use crate::seismic::SeismicEvent;
-use crate::{AppState, SeismicData};
+use crate::state::SeismicData;
+use crate::AppState;
 
 static SEISMIC_URL: &str = "https://www.seismicportal.eu/fdsnws/event/1/query";
 static SEISMIC_WSS_URL: &str = "wss://www.seismicportal.eu/standing_order/websocket";
@@ -259,7 +260,7 @@ impl QueryParams {
 }
 
 mod test {
-    use super::{InnerWssEvent, QueryParams, WssAction, WssEvent};
+    use super::{QueryParams, WssAction, WssEvent};
 
     const EXAMPLE_WSS: &str = r##"
     {
