@@ -1,3 +1,4 @@
+use chrono::NaiveDate;
 use futures_util::StreamExt;
 use tauri::ipc::Channel;
 use tokio_tungstenite::connect_async;
@@ -10,6 +11,11 @@ use crate::{analytics, client, AppState};
 #[tauri::command]
 pub fn get_magnitude_distribution(state: tauri::State<'_, AppState>) -> Vec<(String, u32)> {
     analytics::get_magnitude_distribution_internal(state.inner())
+}
+
+#[tauri::command]
+pub fn get_count_by_year(state: tauri::State<'_, AppState>) -> Vec<(NaiveDate, u32)> {
+    analytics::get_count_by_year_internal(state.inner())
 }
 
 #[tauri::command]
