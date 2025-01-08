@@ -2,12 +2,7 @@ use itertools::Itertools;
 
 use crate::AppState;
 
-#[tauri::command]
-pub fn get_magnitude_distribution(state: tauri::State<'_, AppState>) -> Vec<(String, u32)> {
-    get_magnitude_distribution_internal(state.inner())
-}
-
-fn get_magnitude_distribution_internal(state: &AppState) -> Vec<(String, u32)> {
+pub(crate) fn get_magnitude_distribution_internal(state: &AppState) -> Vec<(String, u32)> {
     let state = state.lock().unwrap();
 
     let magnitudes = state.run_on_events(|event| event.magnitude);
