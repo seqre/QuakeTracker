@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::io::Cursor;
 
-use polars::prelude::{DataFrame, JsonReader, Schema, SerReader, TimeUnit};
+use polars::prelude::{DataFrame, DataType, JsonReader, Schema, SerReader, TimeUnit};
 
 use crate::seismic::SeismicEvent;
 
@@ -9,6 +9,7 @@ use crate::seismic::SeismicEvent;
 pub struct SeismicData {
     events: HashMap<String, SeismicEvent>,
     dataframe: DataFrame,
+    fields: Vec<(String, DataType)>,
 }
 
 impl SeismicData {
@@ -16,19 +17,26 @@ impl SeismicData {
         let mut schema = Schema::default();
 
         use polars::prelude::DataType as DT;
-        schema.insert("unid".into(), DT::String); // id
-        schema.insert("lat".into(), DT::Float64); // latitude
-        schema.insert("lon".into(), DT::Float64); // longitude
-        schema.insert("time".into(), DT::Datetime(TimeUnit::Nanoseconds, None)); // date
-        schema.insert("mag".into(), DT::Float64); // magnitude
-        schema.insert("magtype".into(), DT::String); // magnitude_type
-        schema.insert("depth".into(), DT::Float64); // depth
-        schema.insert("evtype".into(), DT::String); // event_type
-        schema.insert("flynn_region".into(), DT::String); // flynn_region
+        let fields: Vec<(String, DataType)> = vec![
+            ("unid".into(), DT::String),                                // id
+            ("lat".into(), DT::Float64),                                // latitude
+            ("lon".into(), DT::Float64),                                // longitude
+            ("time".into(), DT::Datetime(TimeUnit::Nanoseconds, None)), // date
+            ("mag".into(), DT::Float64),                                // magnitude
+            ("magtype".into(), DT::String),                             // magnitude_type
+            ("depth".into(), DT::Float64),                              // depth
+            ("evtype".into(), DT::String),                              // event_type
+            ("flynn_region".into(), DT::String),                        // flynn_region
+        ];
+
+        for (name, typename) in &fields {
+            schema.insert(name.into(), typename.clone());
+        }
 
         SeismicData {
             events: HashMap::new(),
             dataframe: DataFrame::empty_with_schema(&schema),
+            fields,
         }
     }
     pub fn add_or_update_event(&mut self, event: SeismicEvent) {
