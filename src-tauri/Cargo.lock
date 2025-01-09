@@ -3846,7 +3846,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-log",
  "tauri-plugin-shell",
- "thiserror 1.0.69",
+ "thiserror 2.0.9",
  "tokio-tungstenite",
 ]
 
