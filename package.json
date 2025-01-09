@@ -17,7 +17,6 @@
     "@tauri-apps/plugin-log": "~2",
     "@tauri-apps/plugin-shell": "^2",
     "lucide-svelte": "^0.469.0",
-    "maplibre": "^2.4.1",
     "maplibre-gl": "^4.7.1",
     "pmtiles": "^4.0.1"
   },
