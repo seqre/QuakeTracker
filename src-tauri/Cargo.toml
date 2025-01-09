@@ -32,3 +32,4 @@ thiserror = "1.0.69"
 tokio-tungstenite = { version = "0.25.0", features = ["native-tls"] }
 futures-util = "0.3.31"
 itertools = "0.14.0"
+polars = { version = "0.45.1", features = ["json"] }
