@@ -23,7 +23,7 @@ jobs:
     strategy:
       matrix:
         rust: [ stable, nightly ]
-        os: [ ubuntu-latest ] #, macos-latest, windows-latest
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
 
     name: Build & test
     runs-on: ${{ matrix.os }}
@@ -61,7 +61,7 @@ jobs:
     strategy:
       matrix:
         rust: [ stable, nightly ]
-        os: [ ubuntu-latest, macos-latest ] #, windows-latest]
+        os: [ ubuntu-latest ] #, macos-latest, windows-latest]
 
     name: Build Tauri
     runs-on: ${{ matrix.os }}
