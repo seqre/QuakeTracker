@@ -3,6 +3,7 @@
     import maplibregl from 'maplibre-gl';
     import {PMTiles, Protocol} from 'pmtiles';
     import {onMount} from 'svelte';
+    import * as echarts from 'echarts';
 
     import {defaultTheme} from '../theme'
     import {type PageData} from './$types';
@@ -12,9 +13,35 @@
     import '../app.css'
   import NewPoint from '../components/NewPoint.svelte';
   import { Activity, X } from 'lucide-svelte';
+  import { hide } from '@tauri-apps/api/app';
 
 
     let {data}: { data: PageData } = $props();
+
+    // @ts-ignore
+
+    let grouped = $state(Object.groupBy(data.features, (item) => item.properties.flynn_region))
+
+    console.log(grouped)
+
+    let otherCount = 0
+        // @ts-ignore
+let mapped = Object.keys(grouped).filter((key, index) => {
+    otherCount++
+    return grouped[key]?.length != 1
+}).map(function(key, index) {
+    return {name: key, value: grouped[key]?.length}
+})
+
+
+
+// @ts-ignore
+mapped.push({
+    name: 'Others',
+    value: otherCount
+})
+
+console.log(mapped)
 
     let sidebar = $state(false)
 
@@ -22,6 +49,46 @@
     let realtime: Array<PointData> = $state([])
 
     onMount(async () => {
+
+        let chartDOM = document.querySelector('#chart')
+        // @ts-ignore
+        let chart = echarts.init(chartDOM)
+
+        var option;
+
+option = {
+  title: {
+    text: 'Referer of a Website',
+    subtext: 'Fake Data',
+    left: 'center'
+  },
+  tooltip: {
+    trigger: 'item'
+  },
+  legend: {
+    orient: 'vertical',
+    left: 'left'
+  },
+  series: [
+    {
+      name: 'Access From',
+      type: 'pie',
+      radius: '50%',
+      data: mapped,
+      emphasis: {
+        itemStyle: {
+          shadowBlur: 10,
+          shadowOffsetX: 0,
+          shadowColor: 'rgba(0, 0, 0, 0.5)'
+        }
+      }
+    }
+  ]
+};
+
+option && chart.setOption(option);
+
+
         const protocol = new Protocol();
         maplibregl.addProtocol("pmtiles", (request) => {
             return new Promise((resolve, reject) => {
@@ -183,10 +250,62 @@
             })
         }
         await invoke("listen_to_seismic_events", {onEvent});
+
+
+
+
     })
 
 
     let test = '{"geometry":{"coordinates":[-111.3665,45.9583],"type":"Point"},"source_id":"1747322","source_catalog":"EMSC-RTS","lastupdate":"2024-12-23T20:50:05.790919Z","time":"2024-12-23T19:22:40.77Z","lat":45.9583,"lon":-111.3665,"depth":2.4,"evtype":"ke","auth":"MB","mag":2.1,"magtype":"ml","flynn_region":"WESTERN MONTANA","unid":"20241223_0000210","origins":null,"arrivals":null}'
+
+
+
+
+    let chartDom;
+
+
+    // let myChart = echarts.init(chartDom)
+
+    let option
+
+    option = {
+  title: {
+    text: 'Referer of a Website',
+    subtext: 'Fake Data',
+    left: 'center'
+  },
+  tooltip: {
+    trigger: 'item'
+  },
+  legend: {
+    orient: 'vertical',
+    left: 'left'
+  },
+  series: [
+    {
+      name: 'Access From',
+      type: 'pie',
+      radius: '50%',
+      data: [
+        { value: 1048, name: 'Search Engine' },
+        { value: 735, name: 'Direct' },
+        { value: 580, name: 'Email' },
+        { value: 484, name: 'Union Ads' },
+        { value: 300, name: 'Video Ads' }
+      ],
+      emphasis: {
+        itemStyle: {
+          shadowBlur: 10,
+          shadowOffsetX: 0,
+          shadowColor: 'rgba(0, 0, 0, 0.5)'
+        }
+      }
+    }
+  ]
+}
+
+// option && myChart.setOption(option)
 
 </script>
 
@@ -199,8 +318,8 @@
     </button>
 </div>
 
-{#if sidebar}
-    <aside class="pt-5 h-full fixed bg-white left-0 top-0 z-50 shadow-lg">
+<!-- {#if sidebar} -->
+    <aside class:hidden={sidebar} class=" pt-5 h-full fixed bg-white left-0 top-0 z-50 shadow-lg">
 
         <button onclick={() => sidebar = !sidebar} class="absolute right-3 top-2"> 
             <X/>
@@ -212,5 +331,11 @@
             <!-- {JSON.stringify(real) as unknown as PointData} -->
             <NewPoint pointData={real}></NewPoint>
         {/each}
+
+        <div class="chart w-full h-screen" bind:this={chartDom} id="chart">
+
+        </div>
+
+        
     </aside>
-{/if}
+<!-- {/if} -->
