@@ -44,8 +44,6 @@ mapped.push({
 console.log(mapped)
 
     let sidebar = $state(false)
-
-
     let realtime: Array<PointData> = $state([])
 
     onMount(async () => {
@@ -104,18 +102,15 @@ option && chart.setOption(option);
             });
         });
 
-        // the location of our pmtiles file
+        // PMTiles setup
         const PMTILES_URL = "./my_area.pmtiles";
-
-        // create a new PmTiles instance
         const pmtilesInstance = new PMTiles(PMTILES_URL);
 
         // this is so we share one instance across the JS code and the map renderer
         protocol.add(pmtilesInstance);
 
         // we first fetch the header so we can get the center lon, lat of the map.
-        const mapMetaData = await pmtilesInstance.getHeader();
-
+        // const mapMetaData = await pmtilesInstance.getHeader();
 
         const map = new maplibregl.Map({
             container: 'map',
@@ -126,16 +121,14 @@ option && chart.setOption(option);
             style: {
                 version: 8,
                 sprite: "https://demotiles.maplibre.org/styles/osm-bright-gl-style/sprite",
-                // ading protomaps as the data source for our map
                 sources: {
-                    'example-points': {
+                    'seismic-events': {
                         type: 'geojson',
                         data: {
                             type: 'FeatureCollection',
                             features: data.features,
                         }
                     },
-
                     'protomaps': {
                         type: 'vector',
                         url: `pmtiles://${PMTILES_URL}`,
@@ -148,43 +141,43 @@ option && chart.setOption(option);
                 // https://maplibre.org/maplibre-style-spec/layers/
                 layers: [...defaultTheme,
                     {
-                        id: "example-points-layer",
+                        id: "seismic-events-layer",
                         type: "circle",
-                        source: "example-points",
+                        source: "seismic-events",
                         paint: {
-                            "circle-radius": 5,
+                            "circle-radius": [
+                                "interpolate",
+                                ["linear"],
+                                ["get", "mag"],
+                                0, 3,
+                                10, 7
+                            ],
                             "circle-color": [
                                 "interpolate-hcl",
-                                ["linear"], // Specify a linear interpolation
-                                ["get", "mag"], // Use the `mag` property to interpolate
-                                0, "green", // `mag` = 0 -> green
-                                5, "yellow", // `mag` = 5 -> yellow
-                                10, "red" // `mag` = 10 -> red
+                                ["linear"],
+                                ["get", "mag"],
+                                0, "green",
+                                5, "yellow",
+                                10, "red"
                             ],
                             "circle-stroke-color": "gray",
                             "circle-stroke-width": 1,
                         },
                     },
                 ]
-
             }
         });
-
 
         map.on('load', async () => {
             const image = await map.loadImage('https://upload.wikimedia.org/wikipedia/commons/7/7c/201408_cat.png');
             map.addImage('marker-15', image.data);
-
-
             console.log(map)
         })
 
-
-        map.on('click', 'example-points-layer', (e) => {
+        map.on('click', 'seismic-events-layer', (e) => {
             // @ts-ignore
             const coordinates = e.features[0]!.geometry.coordinates.slice();
             const description = e.features![0]!.properties;
-
 
             // Ensure that if the map is zoomed out such that multiple
             // copies of the feature are visible, the popup appears
@@ -199,25 +192,19 @@ option && chart.setOption(option);
                 <p>Region: ${description.flynn_region}<p/>
                 <p>Last Update: ${description.lastupdate}</p>
                 <p>Mag: ${description.mag}<p>
-                
                 `)
                 .addTo(map);
         });
 
         // Change the cursor to a pointer when the mouse is over the places layer.
-        map.on('mouseenter', 'example-points-layer', () => {
+        map.on('mouseenter', 'seismic-events-layer', () => {
             map.getCanvas().style.cursor = 'pointer';
         });
 
         // Change it back to a pointer when it leaves.
-        map.on('mouseleave', 'example-points-layer', () => {
+        map.on('mouseleave', 'seismic-events-layer', () => {
             map.getCanvas().style.cursor = '';
         });
-
-
-        // console.debug(map.styles.features)
-
-        // map.on('')
 
         type WssEvent = {
             action: 'create' | 'update';
@@ -226,8 +213,9 @@ option && chart.setOption(option);
 
         const onEvent = new Channel<WssEvent>();
         onEvent.onmessage = (message) => {
-            const sourceData = map.getSource('example-points').serialize();
+            console.log(message)
 
+            const sourceData = map.getSource('seismic-events').serialize();
             const newPoint = {
                 type: 'Feature',
                 geometry: message.data.geometry,
@@ -235,14 +223,8 @@ option && chart.setOption(option);
             };
 
             realtime.push(message.data)
-
-            console.log(message)
-
-            console.log(realtime)
-
             sourceData.data.features.push(newPoint);
-
-            map.getSource('example-points').setData(sourceData.data);
+            map.getSource('seismic-events').setData(sourceData.data);
 
             map.flyTo({
                 center: newPoint.geometry.coordinates,
@@ -255,7 +237,6 @@ option && chart.setOption(option);
 
 
     })
-
 
     let test = '{"geometry":{"coordinates":[-111.3665,45.9583],"type":"Point"},"source_id":"1747322","source_catalog":"EMSC-RTS","lastupdate":"2024-12-23T20:50:05.790919Z","time":"2024-12-23T19:22:40.77Z","lat":45.9583,"lon":-111.3665,"depth":2.4,"evtype":"ke","auth":"MB","mag":2.1,"magtype":"ml","flynn_region":"WESTERN MONTANA","unid":"20241223_0000210","origins":null,"arrivals":null}'
 
@@ -313,7 +294,7 @@ option && chart.setOption(option);
 <div id="map"></div>
 
 <div class="fixed top-0 left-0 m-4">
-    <button onclick={() => sidebar = !sidebar} class="p-2 rounded bg-white shadow-lg">
+    <button class="p-2 rounded bg-white shadow-lg" onclick={() => sidebar = !sidebar}>
         <Activity/>
     </button>
 </div>
@@ -321,7 +302,7 @@ option && chart.setOption(option);
 <!-- {#if sidebar} -->
     <aside class:hidden={sidebar} class=" pt-5 h-full fixed bg-white left-0 top-0 z-50 shadow-lg">
 
-        <button onclick={() => sidebar = !sidebar} class="absolute right-3 top-2"> 
+        <button onclick={() => sidebar = !sidebar} class="absolute right-3 top-2">
             <X/>
         </button>
 

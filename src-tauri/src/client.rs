@@ -2,16 +2,14 @@ use chrono::{DateTime, Utc};
 use futures_util::StreamExt;
 use geojson::JsonValue;
 use serde::{Deserialize, Serialize};
-use tauri::ipc::Channel;
-use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
-use tokio_tungstenite::tungstenite::Message;
 use {reqwest, thiserror};
 
 use crate::seismic::SeismicEvent;
+use crate::AppState;
 
-static SEISMIC_URL: &str = "https://www.seismicportal.eu/fdsnws/event/1/query";
-static SEISMIC_WSS_URL: &str = "wss://www.seismicportal.eu/standing_order/websocket";
+pub(crate) static SEISMIC_URL: &str = "https://www.seismicportal.eu/fdsnws/event/1/query";
+pub(crate) static SEISMIC_WSS_URL: &str = "wss://www.seismicportal.eu/standing_order/websocket";
 
 #[derive(Debug, Serialize, thiserror::Error)]
 pub enum Error {
@@ -21,10 +19,14 @@ pub enum Error {
     Network(String),
     #[error("could not deserialize response: `{0}`")]
     Deserialization(String),
+    #[error("Tauri IPC error: `{0}`")]
+    Ipc(String),
 }
 
-#[tauri::command]
-pub async fn get_seismic_events(query_params: QueryParams) -> Result<tauri::ipc::Response, Error> {
+pub(crate) async fn get_seismic_events_internal(
+    state: &AppState,
+    query_params: QueryParams,
+) -> Result<String, Error> {
     query_params.validate()?;
 
     let response = reqwest::Client::new()
@@ -39,24 +41,13 @@ pub async fn get_seismic_events(query_params: QueryParams) -> Result<tauri::ipc:
         .await
         .map_err(|e| Error::Network(e.to_string()))?;
 
-    Ok(tauri::ipc::Response::new(events))
-}
+    let parsed: Vec<SeismicEvent> = geojson::de::deserialize_feature_collection_str_to_vec(&events)
+        .map_err(|e| Error::Deserialization(e.to_string()))?;
 
-// https://www.seismicportal.eu/realtime.html
-#[tauri::command]
-pub async fn listen_to_seismic_events(on_event: Channel<WssEvent>) {
-    let request = SEISMIC_WSS_URL.into_client_request().unwrap();
+    let mut state = state.lock().unwrap();
+    state.add_events(parsed);
 
-    let (mut stream, _response) = connect_async(request).await.unwrap();
-
-    while let Some(msg) = stream.next().await {
-        if let Ok(Message::Text(text)) = msg {
-            let s = serde_json::from_str(text.as_str()).unwrap();
-            log::trace!("WSS Message: {s:?}");
-
-            on_event.send(s).unwrap()
-        }
-    }
+    Ok(events)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -229,7 +220,7 @@ impl QueryParams {
 }
 
 mod test {
-    use super::{InnerWssEvent, QueryParams, WssAction, WssEvent};
+    use super::{QueryParams, WssAction, WssEvent};
 
     const EXAMPLE_WSS: &str = r##"
     {
