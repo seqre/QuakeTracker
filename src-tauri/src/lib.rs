@@ -20,7 +20,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_seismic_events,
             commands::listen_to_seismic_events,
-            commands::get_magnitude_distribution
+            commands::get_magnitude_distribution,
+            commands::get_count_by_year
         ])
         .setup(setup)
         .run(tauri::generate_context!())
