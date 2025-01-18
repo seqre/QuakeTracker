@@ -1,16 +1,18 @@
-import type {PageLoad} from "./$types";
-import {invoke, isTauri, Channel} from "@tauri-apps/api/core";
-import {warn, debug, trace, info, error} from '@tauri-apps/plugin-log';
+import type { PageData, PageLoad } from "./$types";
+import {invoke, isTauri} from "@tauri-apps/api/core";
+
+
 
 export const load: PageLoad = async ({params}) => {
     // @ts-ignore
     console.log(window.__TAURI_INTERNALS__);
+    const limit = parseInt(window.localStorage.getItem('limit') || "100")
 
     if (isTauri())
         return {
             features: await invoke("get_seismic_events", {
                 queryParams: {
-                    limit: 100,
+                    limit
                 },
             }).then((res) => {
                 // @ts-ignore
