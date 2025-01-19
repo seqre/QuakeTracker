@@ -17,6 +17,10 @@ pub fn get_magnitude_distribution(state: tauri::State<'_, AppState>) -> Vec<(Str
 pub fn get_count_by_year(state: tauri::State<'_, AppState>) -> Vec<(NaiveDate, u32)> {
     analytics::get_count_by_year_internal(state.inner())
 }
+#[tauri::command]
+pub fn get_mag_depth_pairs(state: tauri::State<'_, AppState>) -> Vec<(f64, f64)> {
+    analytics::get_mag_depth_pairs_internal(state.inner())
+}
 
 #[tauri::command]
 pub async fn get_seismic_events(

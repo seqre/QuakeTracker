@@ -21,7 +21,8 @@ pub fn run() {
             commands::get_seismic_events,
             commands::listen_to_seismic_events,
             commands::get_magnitude_distribution,
-            commands::get_count_by_year
+            commands::get_count_by_year,
+            commands::get_mag_depth_pairs,
         ])
         .setup(setup)
         .run(tauri::generate_context!())
@@ -29,6 +30,12 @@ pub fn run() {
 }
 
 fn setup<R: Runtime>(app: &mut App<R>) -> Result<(), Box<dyn Error>> {
+    // #[cfg(debug_assertions)] // only include this code on debug builds
+    // {
+    //     let window = app.get_webview_window("main").unwrap();
+    //     window.open_devtools();
+    // }
+
     app.manage(Mutex::new(SeismicData::default()));
     Ok(())
 }

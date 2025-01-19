@@ -37,6 +37,12 @@ pub(crate) fn get_count_by_year_internal(state: &AppState) -> Vec<(NaiveDate, u3
         .collect()
 }
 
+pub(crate) fn get_mag_depth_pairs_internal(state: &AppState) -> Vec<(f64, f64)> {
+    let state = state.lock().unwrap();
+
+    state.run_on_events(|event| (event.magnitude, event.depth))
+}
+
 mod test {
     use std::ops::{Add, AddAssign};
     use std::sync::Mutex;
