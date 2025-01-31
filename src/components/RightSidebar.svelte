@@ -53,7 +53,7 @@
     <div class=" w-96 overflow-y-scroll">
         <div class="w-96 pr-2 h-96" bind:this={chartDom2} id="chart2"></div>
 
-        <div style:height="80rem" class="chart w-96" bind:this={chartDom} id="chart"></div>
+        <div  class="chart w-96 h-96" bind:this={chartDom} id="chart"></div>
 
         <div class="w-96 pr-2 h-96" bind:this={chartDom3} id="chart3"></div>
     </div>

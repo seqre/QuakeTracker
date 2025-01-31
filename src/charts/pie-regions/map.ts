@@ -6,21 +6,20 @@ export const mapToPieRegions = (features: Feature[]) => {
     (item) => item.properties.flynn_region
   );
 
-  let otherCount = 0;
+  // Convert to array and sort by count in descending order
+  const sortedRegions = Object.entries(grouped)
+    .map(([key, value]) => ({ name: key, value: value!.length }))
+    .sort((a, b) => b.value - a.value);
 
-  const mapped = Object.keys(grouped)
-    .filter((key, index) => {
-      otherCount++;
-      return grouped[key]?.length != 1;
-    })
-    .map((key, index) => {
-      return { name: key, value: grouped[key]?.length };
-    });
+  // Get the top 10 regions
+  const topRegions = sortedRegions.slice(0, 10);
 
-  mapped.push({
-    name: "Others",
-    value: otherCount,
-  });
+  // Sum up the rest into "Others"
+  const othersCount = sortedRegions.slice(10).reduce((sum, region) => sum + region.value, 0);
 
-  return mapped;
+  if (othersCount > 0) {
+    topRegions.push({ name: "Others", value: othersCount });
+  }
+
+  return topRegions;
 };
