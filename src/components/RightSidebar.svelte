@@ -15,7 +15,7 @@
     let chartDom3: HTMLElement;
 
     let magnitude = $state({});
-    let count_by_year = $state("dupa");
+    let count_by_year = $state("");
     let magDepthPairs = $state({});
 
     const pieRegionsData = mapToPieRegions(data.features);
