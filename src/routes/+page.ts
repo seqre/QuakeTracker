@@ -14,6 +14,7 @@ export const load: PageLoad = async ({params}) => {
                 queryParams: {
                     limit
                 },
+                clear: true
             }).then((res) => {
                 // @ts-ignore
                 return res.features;

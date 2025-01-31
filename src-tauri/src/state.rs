@@ -64,6 +64,11 @@ impl SeismicData {
             .extend(events.into_iter().map(|event| (event.id.clone(), event)));
     }
 
+    pub fn clear(&mut self) {
+        self.events.clear();
+        self.dataframe = DataFrame::empty_with_schema(&self.dataframe.schema());
+    }
+
     pub fn get_events(&self) -> Vec<SeismicEvent> {
         self.events.values().cloned().collect()
     }

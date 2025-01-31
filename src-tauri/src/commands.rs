@@ -26,7 +26,12 @@ pub fn get_mag_depth_pairs(state: tauri::State<'_, AppState>) -> Vec<(f64, f64)>
 pub async fn get_seismic_events(
     state: tauri::State<'_, AppState>,
     query_params: QueryParams,
+    clear: bool,
 ) -> Result<tauri::ipc::Response, Error> {
+    if clear {
+        let mut state = state.lock().unwrap();
+        state.clear();
+    }
     let events = client::get_seismic_events_internal(state.inner(), query_params).await?;
     Ok(tauri::ipc::Response::new(events))
 }
