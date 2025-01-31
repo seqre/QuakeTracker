@@ -2,9 +2,12 @@
 
 ## Setup
 
-First, download PMTiles using instructions
-from [here](https://docs.protomaps.com/guide/getting-started#_3-extract-any-area) and extract the contents to the root
-of the project.
+First, install the following dependencies:
+
+- Rust
+- Node.js
+- Yarn
+- Tauri CLI
 
 Then, run the following commands:
 
