@@ -22,14 +22,14 @@ tauri = { version = "2", features = [] }
 tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-log = "0.4.26"
+log = "0.4"
 tauri-plugin-log = "2"
-geojson = "0.24.2"
-geo-types = "0.7.15"
-reqwest = "0.12.14"
-chrono = { version = "0.4.40", features = ["serde"] }
-thiserror = "2.0.12"
-tokio-tungstenite = { version = "0.26.2", features = ["native-tls"] }
-futures-util = "0.3.31"
-itertools = "0.14.0"
-polars = { version = "0.45.1", features = ["json"] }
+geojson = "0.24"
+geo-types = "0.7"
+reqwest = "0.12"
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2"
+tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
+futures-util = "0.3"
+itertools = "0.14"
+polars = { version = "0.47", features = ["json"] }
