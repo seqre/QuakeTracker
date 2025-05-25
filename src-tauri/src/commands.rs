@@ -17,9 +17,27 @@ pub fn get_magnitude_distribution(state: tauri::State<'_, AppState>) -> Vec<(Str
 pub fn get_count_by_year(state: tauri::State<'_, AppState>) -> Vec<(NaiveDate, u32)> {
     analytics::get_count_by_year_internal(state.inner())
 }
+
 #[tauri::command]
 pub fn get_mag_depth_pairs(state: tauri::State<'_, AppState>) -> Vec<(f64, f64)> {
     analytics::get_mag_depth_pairs_internal(state.inner())
+}
+
+#[tauri::command]
+pub fn get_advanced_analytics(
+    state: tauri::State<'_, AppState>,
+) -> Result<serde_json::Value, String> {
+    analytics::get_advanced_analytics_internal(state.inner())
+}
+
+#[tauri::command]
+pub fn get_data_stats(state: tauri::State<'_, AppState>) -> Result<serde_json::Value, String> {
+    let state = state
+        .lock()
+        .map_err(|e| format!("Failed to lock state: {}", e))?;
+    let stats = state.get_stats();
+
+    serde_json::to_value(stats).map_err(|e| format!("Failed to serialize stats: {}", e))
 }
 
 #[tauri::command]
@@ -52,7 +70,9 @@ pub async fn listen_to_seismic_events(
             log::trace!("WSS Message: {wss_event:?}");
 
             let mut state = state.lock().unwrap();
-            state.add_or_update_event(wss_event.data.clone());
+            if let Err(e) = state.add_or_update_event(wss_event.data.clone()) {
+                log::error!("Failed to add event: {}", e);
+            }
 
             if let Err(e) = on_event.send(wss_event) {
                 log::error!("{}", Error::Ipc(e.to_string()));
@@ -61,4 +81,14 @@ pub async fn listen_to_seismic_events(
     }
 
     Ok(())
+}
+
+#[tauri::command]
+pub fn recompute_analytics(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    let state = state
+        .lock()
+        .map_err(|e| format!("Failed to lock state: {}", e))?;
+    state
+        .recompute_analytics()
+        .map_err(|e| format!("Failed to recompute analytics: {}", e))
 }

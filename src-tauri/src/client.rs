@@ -1,8 +1,6 @@
 use chrono::{DateTime, Utc};
-use futures_util::StreamExt;
 use geojson::JsonValue;
 use serde::{Deserialize, Serialize};
-use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use {reqwest, thiserror};
 
 use crate::seismic::SeismicEvent;
@@ -45,7 +43,9 @@ pub(crate) async fn get_seismic_events_internal(
         .map_err(|e| Error::Deserialization(e.to_string()))?;
 
     let mut state = state.lock().unwrap();
-    state.add_events(parsed);
+    state
+        .add_events(parsed)
+        .map_err(|e| Error::Deserialization(e.to_string()))?;
 
     Ok(events)
 }
@@ -220,7 +220,7 @@ impl QueryParams {
 }
 
 mod test {
-    use super::{QueryParams, WssAction, WssEvent};
+    use crate::client::{QueryParams, WssAction, WssEvent};
 
     const EXAMPLE_WSS: &str = r##"
     {

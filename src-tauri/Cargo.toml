@@ -32,4 +32,6 @@ thiserror = "2"
 tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
 futures-util = "0.3"
 itertools = "0.14"
-polars = { version = "0.47", features = ["json"] }
+polars = { version = "0.46", features = ["json", "lazy", "temporal", "dtype-datetime", "serde"] }
+dashmap = "6.1"
+parking_lot = "0.12"

@@ -26,7 +26,7 @@ cargo tauri dev
 
 ## Future Work
 
-- [ ] Streamline data processing pipeline
+- [x] Streamline data processing pipeline
 - [ ] Add more data visualization options
 - [ ] Improve UI/UX
 - [ ] Add more filtering options

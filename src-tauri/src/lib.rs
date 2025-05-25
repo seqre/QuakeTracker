@@ -4,6 +4,9 @@ mod commands;
 mod seismic;
 mod state;
 
+#[cfg(test)]
+pub(crate) mod test_utils;
+
 use std::error::Error;
 use std::sync::Mutex;
 
@@ -23,6 +26,9 @@ pub fn run() {
             commands::get_magnitude_distribution,
             commands::get_count_by_year,
             commands::get_mag_depth_pairs,
+            commands::get_advanced_analytics,
+            commands::get_data_stats,
+            commands::recompute_analytics,
         ])
         .setup(setup)
         .run(tauri::generate_context!())
