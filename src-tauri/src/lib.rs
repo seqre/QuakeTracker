@@ -29,6 +29,15 @@ pub fn run() {
             commands::get_advanced_analytics,
             commands::get_data_stats,
             commands::recompute_analytics,
+            commands::get_hourly_frequency,
+            commands::get_monthly_frequency,
+            commands::get_weekly_frequency,
+            commands::get_region_hotspots,
+            commands::get_coordinate_clusters,
+            commands::get_b_value,
+            commands::get_magnitude_frequency_data,
+            commands::get_risk_metrics,
+            commands::get_total_energy,
         ])
         .setup(setup)
         .run(tauri::generate_context!())

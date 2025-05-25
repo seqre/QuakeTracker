@@ -360,6 +360,44 @@ impl IncrementalAnalytics {
         Ok(())
     }
 
+    /// Replace the dataframe with a filtered version and rebuild analytics
+    /// This is used for cleanup operations to remove old or excess events
+    pub fn replace_dataframe_and_rebuild(&self, new_df: LazyFrame) -> Result<(), PolarsError> {
+        // Replace the dataframe
+        {
+            let mut df_guard = self.dataframe.write();
+            *df_guard = new_df;
+        }
+
+        // Rebuild the event index
+        self.event_index.clear();
+        let collected_df = self.dataframe.read().clone().collect()?;
+        if let Ok(ids_column) = collected_df.column("unid") {
+            if let Ok(ids) = ids_column.str() {
+                for (index, id_opt) in ids.iter().enumerate() {
+                    if let Some(id) = id_opt {
+                        self.event_index.insert(id.to_string(), index);
+                    }
+                }
+            }
+        }
+
+        // Update cache with new event count
+        {
+            let mut cache = self.cache.write();
+            cache.total_events = collected_df.height();
+            cache.last_updated = Utc::now();
+        }
+
+        // Clear all analytics processors and recompute
+        for processor in &self.analytics_processors {
+            processor.clear();
+        }
+
+        self.recompute_all()?;
+        Ok(())
+    }
+
     fn event_to_dataframe(&self, event: &SeismicEvent) -> Result<DataFrame, PolarsError> {
         let mut df = df! [
             "unid" => [event.id.as_str()],

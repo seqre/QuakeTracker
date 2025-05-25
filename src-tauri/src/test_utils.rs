@@ -1,4 +1,3 @@
-
 use chrono::{DateTime, Utc};
 
 use crate::seismic::SeismicEvent;
