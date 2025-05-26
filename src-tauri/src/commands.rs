@@ -1,11 +1,12 @@
 use chrono::NaiveDate;
 use futures_util::StreamExt;
 use tauri::ipc::Channel;
+use tokio::time::{sleep, Duration};
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::Message;
 
-use crate::client::{ClientError, ClientResult, QueryParams, WssEvent, SEISMIC_WSS_URL};
+use crate::client::{ClientResult, QueryParams, WssEvent, SEISMIC_WSS_URL};
 use crate::{analytics, client, AppState};
 
 #[tauri::command]
@@ -60,24 +61,105 @@ pub async fn listen_to_seismic_events(
     state: tauri::State<'_, AppState>,
     on_event: Channel<WssEvent>,
 ) -> ClientResult<()> {
-    let request = SEISMIC_WSS_URL.into_client_request().unwrap();
-
-    let (mut stream, _response) = connect_async(request).await.unwrap();
-
-    while let Some(msg) = stream.next().await {
-        if let Ok(Message::Text(text)) = msg {
-            let wss_event: WssEvent = serde_json::from_str(text.as_str()).unwrap();
-            log::trace!("WSS Message: {wss_event:?}");
-
-            let mut state = state.lock().unwrap();
-            if let Err(e) = state.add_or_update_event(wss_event.data.clone()) {
-                log::error!("Failed to add event: {}", e);
+    log::info!("Starting WebSocket connection to EMSC with retry logic");
+    
+    const MAX_RETRIES: u32 = 5;
+    const INITIAL_DELAY_MS: u64 = 1000;
+    
+    let mut retry_count = 0;
+    let mut delay = INITIAL_DELAY_MS;
+    
+    while retry_count < MAX_RETRIES {
+        match connect_and_listen(&state, &on_event).await {
+            Ok(_) => {
+                log::info!("WebSocket connection closed gracefully");
+                return Ok(());
             }
-
-            if let Err(e) = on_event.send(wss_event) {
-                log::error!("{}", ClientError::Ipc(e.to_string()));
+            Err(e) => {
+                retry_count += 1;
+                log::error!("WebSocket connection failed (attempt {}/{}): {}", retry_count, MAX_RETRIES, e);
+                
+                if retry_count >= MAX_RETRIES {
+                    log::error!("Max retry attempts reached, giving up");
+                    return Err(e);
+                }
+                
+                log::info!("Retrying in {}ms...", delay);
+                sleep(Duration::from_millis(delay)).await;
+                
+                // Exponential backoff with cap at 30 seconds
+                delay = std::cmp::min(delay * 2, 30000);
             }
         }
+    }
+    
+    Err(crate::client::ClientError::Network("Failed to connect after all retries".to_string()))
+}
+
+async fn connect_and_listen(
+    state: &tauri::State<'_, AppState>,
+    on_event: &Channel<WssEvent>,
+) -> ClientResult<()> {
+    let request = SEISMIC_WSS_URL.into_client_request()
+        .map_err(|e| crate::client::ClientError::Network(format!("Invalid WebSocket URL: {}", e)))?;
+
+    let (mut stream, _response) = connect_async(request).await
+        .map_err(|e| crate::client::ClientError::Network(format!("WebSocket connection failed: {}", e)))?;
+
+    log::info!("WebSocket connected successfully");
+
+    while let Some(msg) = stream.next().await {
+        match msg {
+            Ok(Message::Text(text)) => {
+                match handle_websocket_message(&text, state, on_event).await {
+                    Ok(_) => {},
+                    Err(e) => {
+                        log::error!("Error handling WebSocket message: {}", e);
+                    }
+                }
+            }
+            Ok(Message::Close(_)) => {
+                log::info!("WebSocket closed by server");
+                break;
+            }
+            Ok(_) => {
+                log::warn!("Received unexpected message");
+            }
+            Err(e) => {
+                log::error!("WebSocket error: {}", e);
+                return Err(crate::client::ClientError::Network(format!("WebSocket error: {}", e)));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn handle_websocket_message(
+    text: &str,
+    state: &tauri::State<'_, AppState>,
+    on_event: &Channel<WssEvent>,
+) -> ClientResult<()> {
+    log::trace!("Received WebSocket message: {}", text);
+
+    let wss_event: WssEvent = serde_json::from_str(text)
+        .map_err(|e| crate::client::ClientError::Parse(format!("Failed to parse WebSocket message: {}", e)))?;
+
+    log::debug!("Parsed WebSocket event: {:?}", wss_event);
+
+    // Add event to state
+    {
+        let mut state_guard = state.lock()
+            .map_err(|e| crate::client::ClientError::Internal(format!("Failed to acquire state lock: {}", e)))?;
+        
+        state_guard.add_or_update_event(wss_event.data.clone())
+            .map_err(|e| crate::client::ClientError::Internal(format!("Failed to add event to state: {}", e)))?;
+    }
+
+    // Send event to frontend
+    if let Err(e) = on_event.send(wss_event) {
+        log::error!("Failed to send event to frontend: {}", e);
+        return Err(crate::client::ClientError::Internal(format!("Failed to send event to frontend: {}", e)));
     }
 
     Ok(())
