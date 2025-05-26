@@ -1,51 +1,94 @@
 use chrono::{DateTime, Utc};
-use futures_util::StreamExt;
 use geojson::JsonValue;
 use serde::{Deserialize, Serialize};
-use tokio_tungstenite::tungstenite::client::IntoClientRequest;
-use {reqwest, thiserror};
 
+use crate::error::{ErrorContextExt, QuakeTrackerError, Result};
 use crate::seismic::SeismicEvent;
 use crate::AppState;
 
 pub(crate) static SEISMIC_URL: &str = "https://www.seismicportal.eu/fdsnws/event/1/query";
 pub(crate) static SEISMIC_WSS_URL: &str = "wss://www.seismicportal.eu/standing_order/websocket";
 
+/// Client error type for Tauri command responses
+///
+/// This error type is specifically designed for serialization to the frontend
+/// and provides a clean interface for error handling in Tauri commands.
+/// It uses tagged serialization to provide structured error information.
 #[derive(Debug, Serialize, thiserror::Error)]
-pub enum Error {
-    #[error("provided query is incorrect: `{0}`")]
+#[serde(tag = "type", content = "message")]
+pub enum ClientError {
+    #[error("Validation error: {0}")]
     Validation(String),
-    #[error("network connection error: `{0}`")]
+    #[error("Network error: {0}")]
     Network(String),
-    #[error("could not deserialize response: `{0}`")]
-    Deserialization(String),
-    #[error("Tauri IPC error: `{0}`")]
+    #[error("Parse error: {0}")]
+    Parse(String),
+    #[error("IPC error: {0}")]
     Ipc(String),
+    #[error("Internal error: {0}")]
+    Internal(String),
 }
+
+impl From<QuakeTrackerError> for ClientError {
+    fn from(err: QuakeTrackerError) -> Self {
+        match err {
+            QuakeTrackerError::Validation { message, .. } => ClientError::Validation(message),
+            QuakeTrackerError::Network(_) => ClientError::Network(err.to_string()),
+            QuakeTrackerError::Json(_)
+            | QuakeTrackerError::GeoJson(_)
+            | QuakeTrackerError::DateTime(_) => ClientError::Parse(err.to_string()),
+            QuakeTrackerError::ExternalService { message, .. } => ClientError::Network(message),
+            QuakeTrackerError::Analytics(_) => ClientError::Internal(err.to_string()),
+            QuakeTrackerError::Storage(_) => ClientError::Internal(err.to_string()),
+            QuakeTrackerError::State(_) => ClientError::Internal(err.to_string()),
+            QuakeTrackerError::Configuration { message } => ClientError::Internal(message),
+            QuakeTrackerError::ResourceExhaustion { message, .. } => ClientError::Internal(message),
+            QuakeTrackerError::Internal { message } => ClientError::Internal(message),
+        }
+    }
+}
+
+/// Result type alias for client operations
+pub type ClientResult<T> = std::result::Result<T, ClientError>;
 
 pub(crate) async fn get_seismic_events_internal(
     state: &AppState,
     query_params: QueryParams,
-) -> Result<String, Error> {
-    query_params.validate()?;
+) -> ClientResult<String> {
+    let result = get_seismic_events_internal_impl(state, query_params).await;
+    result.map_err(|e| e.into())
+}
+
+async fn get_seismic_events_internal_impl(
+    state: &AppState,
+    query_params: QueryParams,
+) -> Result<String> {
+    query_params
+        .validate()
+        .with_operation("validate_params", "client")?;
 
     let response = reqwest::Client::new()
         .get(SEISMIC_URL)
         .query(&query_params)
         .send()
         .await
-        .map_err(|e| Error::Network(e.to_string()))?;
+        .with_operation("fetch_events", "emsc_api")?;
 
     let events = response
         .text()
         .await
-        .map_err(|e| Error::Network(e.to_string()))?;
+        .with_operation("read_response", "emsc_api")?;
 
     let parsed: Vec<SeismicEvent> = geojson::de::deserialize_feature_collection_str_to_vec(&events)
-        .map_err(|e| Error::Deserialization(e.to_string()))?;
+        .with_operation("parse_geojson", "client")?;
 
-    let mut state = state.lock().unwrap();
-    state.add_events(parsed);
+    let mut state = state
+        .lock()
+        .map_err(|e| QuakeTrackerError::state(format!("Failed to acquire state lock: {}", e)))?;
+
+    state
+        .add_events(parsed)
+        .with_operation("store_events", "state")?;
 
     Ok(events)
 }
@@ -64,20 +107,23 @@ struct InnerWssEvent {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(from = "InnerWssEvent", rename_all(serialize = "camelCase"))]
+#[serde(try_from = "InnerWssEvent", rename_all(serialize = "camelCase"))]
 pub struct WssEvent {
     pub action: WssAction,
     pub data: SeismicEvent,
 }
 
-impl From<InnerWssEvent> for WssEvent {
-    fn from(inner: InnerWssEvent) -> Self {
+impl TryFrom<InnerWssEvent> for WssEvent {
+    type Error = geojson::Error;
+
+    fn try_from(inner: InnerWssEvent) -> std::result::Result<Self, Self::Error> {
         let reader = inner.data.to_string();
-        let event = geojson::de::deserialize_single_feature(reader.as_bytes()).unwrap();
-        WssEvent {
+        let event = geojson::de::deserialize_single_feature(reader.as_bytes())?;
+
+        Ok(WssEvent {
             action: inner.action,
             data: event,
-        }
+        })
     }
 }
 
@@ -214,13 +260,169 @@ pub struct QueryParams {
 }
 
 impl QueryParams {
-    pub fn validate(&self) -> Result<(), Error> {
+    pub fn validate(&self) -> Result<()> {
+        use crate::error::validation::*;
+
+        // Validate time constraints
+        if let (Some(start), Some(end)) = (
+            &self.time_constraints.start_time,
+            &self.time_constraints.end_time,
+        ) {
+            if start > end {
+                return Err(QuakeTrackerError::validation(
+                    "time_range",
+                    "Start time must be before end time",
+                ));
+            }
+        }
+
+        // Validate geographic constraints (bounding box)
+        if let Some(min_lat) = self.box_area_constraints.min_latitude {
+            validate_latitude(min_lat as f64)?;
+        }
+        if let Some(max_lat) = self.box_area_constraints.max_latitude {
+            validate_latitude(max_lat as f64)?;
+        }
+        if let Some(min_lon) = self.box_area_constraints.min_longitude {
+            validate_longitude(min_lon as f64)?;
+        }
+        if let Some(max_lon) = self.box_area_constraints.max_longitude {
+            validate_longitude(max_lon as f64)?;
+        }
+
+        // Validate bounding box consistency
+        if let (Some(min_lat), Some(max_lat)) = (
+            self.box_area_constraints.min_latitude,
+            self.box_area_constraints.max_latitude,
+        ) {
+            if min_lat > max_lat {
+                return Err(QuakeTrackerError::validation(
+                    "latitude_range",
+                    "Minimum latitude must be less than maximum latitude",
+                ));
+            }
+        }
+
+        if let (Some(min_lon), Some(max_lon)) = (
+            self.box_area_constraints.min_longitude,
+            self.box_area_constraints.max_longitude,
+        ) {
+            if min_lon > max_lon {
+                return Err(QuakeTrackerError::validation(
+                    "longitude_range",
+                    "Minimum longitude must be less than maximum longitude",
+                ));
+            }
+        }
+
+        // Validate circular constraints
+        if let Some(lat) = self.circle_constraints.latitude {
+            validate_latitude(lat as f64)?;
+        }
+        if let Some(lon) = self.circle_constraints.longitude {
+            validate_longitude(lon as f64)?;
+        }
+
+        if let (Some(min_rad), Some(max_rad)) = (
+            self.circle_constraints.min_radius,
+            self.circle_constraints.max_radius,
+        ) {
+            if min_rad < 0.0 {
+                return Err(QuakeTrackerError::validation(
+                    "min_radius",
+                    "Minimum radius cannot be negative",
+                ));
+            }
+            if max_rad < 0.0 {
+                return Err(QuakeTrackerError::validation(
+                    "max_radius",
+                    "Maximum radius cannot be negative",
+                ));
+            }
+            if min_rad > max_rad {
+                return Err(QuakeTrackerError::validation(
+                    "radius_range",
+                    "Minimum radius must be less than maximum radius",
+                ));
+            }
+        }
+
+        // Validate depth constraints
+        if let Some(min_depth) = self.other_parameters.min_depth {
+            validate_depth(min_depth as f64)?;
+        }
+        if let Some(max_depth) = self.other_parameters.max_depth {
+            validate_depth(max_depth as f64)?;
+        }
+
+        if let (Some(min_depth), Some(max_depth)) = (
+            self.other_parameters.min_depth,
+            self.other_parameters.max_depth,
+        ) {
+            if min_depth > max_depth {
+                return Err(QuakeTrackerError::validation(
+                    "depth_range",
+                    "Minimum depth must be less than maximum depth",
+                ));
+            }
+        }
+
+        // Validate magnitude constraints
+        if let Some(min_mag) = self.other_parameters.min_magnitude {
+            validate_magnitude(min_mag as f64)?;
+        }
+        if let Some(max_mag) = self.other_parameters.max_magnitude {
+            validate_magnitude(max_mag as f64)?;
+        }
+
+        if let (Some(min_mag), Some(max_mag)) = (
+            self.other_parameters.min_magnitude,
+            self.other_parameters.max_magnitude,
+        ) {
+            if min_mag > max_mag {
+                return Err(QuakeTrackerError::validation(
+                    "magnitude_range",
+                    "Minimum magnitude must be less than maximum magnitude",
+                ));
+            }
+        }
+
+        // Validate limit
+        if self.other_parameters.limit.0 <= 0 {
+            return Err(QuakeTrackerError::validation(
+                "limit",
+                "Limit must be greater than 0",
+            ));
+        }
+
+        if self.other_parameters.limit.0 > 20000 {
+            return Err(QuakeTrackerError::validation(
+                "limit",
+                "Limit cannot exceed 20000 events",
+            ));
+        }
+
+        // Validate offset
+        if let Some(offset) = self.other_parameters.offset {
+            if offset < 0 {
+                return Err(QuakeTrackerError::validation(
+                    "offset",
+                    "Offset cannot be negative",
+                ));
+            }
+        }
+
+        // Validate event ID
+        if let Some(ref event_id) = self.other_parameters.event_id {
+            validate_event_id(event_id)?;
+        }
+
         Ok(())
     }
 }
 
 mod test {
-    use super::{QueryParams, WssAction, WssEvent};
+    use crate::client::{QueryParams, WssAction, WssEvent};
 
     const EXAMPLE_WSS: &str = r##"
     {

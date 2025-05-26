@@ -14,7 +14,7 @@ pub struct SeismicEvent {
         serialize_with = "serialize_geometry",
         deserialize_with = "deserialize_geometry"
     )]
-    geometry: geo_types::Point<f64>,
+    pub geometry: geo_types::Point<f64>,
     #[serde(rename = "source_id")]
     pub source_id: String,
     #[serde(rename = "source_catalog")]
@@ -80,7 +80,7 @@ impl SeismicEvent {
 
         let cursor = Cursor::new(js);
 
-        geojson::de::deserialize_single_feature(cursor).unwrap()
+        geojson::de::deserialize_single_feature(cursor).expect("Failed to deserialize test event")
     }
 }
 
@@ -217,7 +217,7 @@ pub struct StamagObject {
 mod test {
     use chrono::{DateTime, NaiveDate, Utc};
 
-    use super::SeismicEvent;
+    use crate::seismic::SeismicEvent;
 
     const EXAMPLE_JSON: &'static str = r##"
     {
