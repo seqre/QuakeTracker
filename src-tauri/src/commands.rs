@@ -5,7 +5,7 @@ use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::Message;
 
-use crate::client::{Error, QueryParams, WssEvent, SEISMIC_WSS_URL};
+use crate::client::{ClientError, ClientResult, QueryParams, WssEvent, SEISMIC_WSS_URL};
 use crate::{analytics, client, AppState};
 
 #[tauri::command]
@@ -45,7 +45,7 @@ pub async fn get_seismic_events(
     state: tauri::State<'_, AppState>,
     query_params: QueryParams,
     clear: bool,
-) -> Result<tauri::ipc::Response, Error> {
+) -> ClientResult<tauri::ipc::Response> {
     if clear {
         let mut state = state.lock().unwrap();
         state.clear();
@@ -59,7 +59,7 @@ pub async fn get_seismic_events(
 pub async fn listen_to_seismic_events(
     state: tauri::State<'_, AppState>,
     on_event: Channel<WssEvent>,
-) -> Result<(), Error> {
+) -> ClientResult<()> {
     let request = SEISMIC_WSS_URL.into_client_request().unwrap();
 
     let (mut stream, _response) = connect_async(request).await.unwrap();
@@ -75,7 +75,7 @@ pub async fn listen_to_seismic_events(
             }
 
             if let Err(e) = on_event.send(wss_event) {
-                log::error!("{}", Error::Ipc(e.to_string()));
+                log::error!("{}", ClientError::Ipc(e.to_string()));
             }
         }
     }

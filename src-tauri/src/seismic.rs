@@ -5,6 +5,8 @@ use geojson::de::deserialize_geometry;
 use geojson::ser::serialize_geometry;
 use serde::{Deserialize, Serialize};
 
+
+
 // Generated from: https://www.emsc-csem.org/Files/epos/specifications/Specs_fdsnevent-WS.pdf
 
 /// Main event feature representing an earthquake event
@@ -47,6 +49,7 @@ pub struct SeismicEvent {
 }
 
 impl SeismicEvent {
+
     pub(crate) fn test_event() -> Self {
         let js = r##"
         {

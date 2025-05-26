@@ -167,7 +167,9 @@ mod test {
         let state = state_with_n_entries_func(5, |index| {
             let mut event = SeismicEvent::test_event();
             event.id.push_str(&index.to_string());
-            event.time = event.time + chrono::TimeDelta::days(index.div_euclid(2) as i64);
+            let time_delta = chrono::TimeDelta::days(index.div_euclid(2) as i64);
+            event.time = event.time + time_delta;
+            event.last_update = event.last_update + time_delta;
             event
         });
         let start_date = NaiveDate::from_ymd_opt(2024, 12, 10).unwrap();

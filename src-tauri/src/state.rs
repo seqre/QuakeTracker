@@ -3,6 +3,7 @@ use std::sync::Arc;
 use polars::prelude::*;
 
 use crate::analytics::incremental::IncrementalAnalytics;
+use crate::error::{ErrorContextExt, Result};
 use crate::seismic::SeismicEvent;
 
 /// Improved seismic data storage with incremental analytics
@@ -46,26 +47,30 @@ impl SeismicData {
     }
 
     /// Add or update a single seismic event
-    pub fn add_or_update_event(&mut self, event: SeismicEvent) -> Result<(), PolarsError> {
-        self.analytics.add_event(&event)?;
+    pub fn add_or_update_event(&mut self, event: SeismicEvent) -> Result<()> {
+        self.analytics.add_event(&event)
+            .with_operation("add_event_to_analytics", "state")?;
 
         if self.config.auto_cleanup {
-            self.maybe_cleanup()?;
+            self.maybe_cleanup()
+                .with_operation("auto_cleanup", "state")?;
         }
 
         Ok(())
     }
 
     /// Add multiple seismic events efficiently
-    pub fn add_events(&mut self, events: Vec<SeismicEvent>) -> Result<(), PolarsError> {
+    pub fn add_events(&mut self, events: Vec<SeismicEvent>) -> Result<()> {
         if events.is_empty() {
             return Ok(());
         }
 
-        self.analytics.add_events(&events)?;
+        self.analytics.add_events(&events)
+            .with_operation("add_events_to_analytics", "state")?;
 
         if self.config.auto_cleanup {
-            self.maybe_cleanup()?;
+            self.maybe_cleanup()
+                .with_operation("auto_cleanup", "state")?;
         }
 
         Ok(())
@@ -77,27 +82,32 @@ impl SeismicData {
     }
 
     /// Get all events (expensive operation, use sparingly)
-    pub fn get_events(&self) -> Result<Vec<SeismicEvent>, PolarsError> {
-        let df = self.analytics.get_dataframe().collect()?;
+    pub fn get_events(&self) -> Result<Vec<SeismicEvent>> {
+        let df = self.analytics.get_dataframe().collect()
+            .with_operation("collect_dataframe", "state")?;
         self.dataframe_to_events(df)
+            .with_operation("convert_dataframe_to_events", "state")
     }
 
     /// Get events in chronological order (expensive operation, use sparingly)
-    pub fn get_chronological_events(&self) -> Result<Vec<SeismicEvent>, PolarsError> {
+    pub fn get_chronological_events(&self) -> Result<Vec<SeismicEvent>> {
         let df = self
             .analytics
             .get_dataframe()
             .sort(["time"], Default::default())
-            .collect()?;
+            .collect()
+            .with_operation("collect_sorted_dataframe", "state")?;
         self.dataframe_to_events(df)
+            .with_operation("convert_sorted_dataframe_to_events", "state")
     }
 
     /// Run a function on all events (legacy compatibility)
-    pub fn run_on_events<F, T>(&self, func: F) -> Result<Vec<T>, PolarsError>
+    pub fn run_on_events<F, T>(&self, func: F) -> Result<Vec<T>>
     where
         F: Fn(&SeismicEvent) -> T,
     {
-        let events = self.get_events()?;
+        let events = self.get_events()
+            .with_operation("get_events_for_function", "state")?;
         Ok(events.iter().map(func).collect())
     }
 
@@ -127,8 +137,9 @@ impl SeismicData {
     }
 
     /// Force a full recomputation of all analytics
-    pub fn recompute_analytics(&self) -> Result<(), PolarsError> {
+    pub fn recompute_analytics(&self) -> Result<()> {
         self.analytics.recompute_all()
+            .with_operation("recompute_all_analytics", "state")
     }
 
     /// Get events within a specific time range
@@ -136,7 +147,7 @@ impl SeismicData {
         &self,
         start: chrono::DateTime<chrono::Utc>,
         end: chrono::DateTime<chrono::Utc>,
-    ) -> Result<Vec<SeismicEvent>, PolarsError> {
+    ) -> Result<Vec<SeismicEvent>> {
         let start_ns = start.timestamp_nanos_opt().unwrap_or(0);
         let end_ns = end.timestamp_nanos_opt().unwrap_or(0);
 
@@ -148,9 +159,11 @@ impl SeismicData {
                     .gt_eq(lit(start_ns))
                     .and(col("time").lt_eq(lit(end_ns))),
             )
-            .collect()?;
+            .collect()
+            .with_operation("collect_time_filtered_dataframe", "state")?;
 
         self.dataframe_to_events(df)
+            .with_operation("convert_time_filtered_dataframe_to_events", "state")
     }
 
     /// Get events within a geographic bounding box
@@ -160,7 +173,7 @@ impl SeismicData {
         max_lat: f64,
         min_lon: f64,
         max_lon: f64,
-    ) -> Result<Vec<SeismicEvent>, PolarsError> {
+    ) -> Result<Vec<SeismicEvent>> {
         let df = self
             .analytics
             .get_dataframe()
@@ -171,26 +184,30 @@ impl SeismicData {
                     .and(col("lon").gt_eq(lit(min_lon)))
                     .and(col("lon").lt_eq(lit(max_lon))),
             )
-            .collect()?;
+            .collect()
+            .with_operation("collect_bbox_filtered_dataframe", "state")?;
 
         self.dataframe_to_events(df)
+            .with_operation("convert_bbox_filtered_dataframe_to_events", "state")
     }
 
     /// Get events with magnitude above threshold
     pub fn get_events_above_magnitude(
         &self,
         min_magnitude: f64,
-    ) -> Result<Vec<SeismicEvent>, PolarsError> {
+    ) -> Result<Vec<SeismicEvent>> {
         let df = self
             .analytics
             .get_dataframe()
             .filter(col("mag").gt_eq(lit(min_magnitude)))
-            .collect()?;
+            .collect()
+            .with_operation("collect_magnitude_filtered_dataframe", "state")?;
 
         self.dataframe_to_events(df)
+            .with_operation("convert_magnitude_filtered_dataframe_to_events", "state")
     }
 
-    fn maybe_cleanup(&mut self) -> Result<(), PolarsError> {
+    fn maybe_cleanup(&mut self) -> Result<()> {
         let stats = self.get_stats();
         let mut needs_cleanup = false;
         let mut cleanup_reason = String::new();
@@ -241,7 +258,7 @@ impl SeismicData {
 
     /// Perform the actual cleanup by filtering the dataframe and rebuilding
     /// analytics
-    fn perform_cleanup(&mut self) -> Result<(), PolarsError> {
+    fn perform_cleanup(&mut self) -> Result<()> {
         let old_stats = self.get_stats();
         let mut filtered_df = self.analytics.get_dataframe();
 
@@ -279,7 +296,7 @@ impl SeismicData {
         cache.total_events * 500
     }
 
-    fn dataframe_to_events(&self, df: DataFrame) -> Result<Vec<SeismicEvent>, PolarsError> {
+    fn dataframe_to_events(&self, df: DataFrame) -> Result<Vec<SeismicEvent>> {
         let mut events = Vec::new();
         let height = df.height();
 
@@ -428,7 +445,9 @@ mod tests {
         for i in 0..5 {
             let mut event = SeismicEvent::test_event();
             event.id = format!("test_{}", i);
-            event.time = event.time + chrono::TimeDelta::seconds(i as i64);
+            let time_delta = chrono::TimeDelta::seconds(i as i64);
+            event.time = event.time + time_delta;
+            event.last_update = event.last_update + time_delta;
             events.push(event);
         }
 
@@ -460,10 +479,12 @@ mod tests {
         let mut old_event = SeismicEvent::test_event();
         old_event.id = "old_event".to_string();
         old_event.time = old_time;
+        old_event.last_update = old_time;
 
         let mut recent_event = SeismicEvent::test_event();
         recent_event.id = "recent_event".to_string();
         recent_event.time = recent_time;
+        recent_event.last_update = recent_time;
 
         data.add_events(vec![old_event, recent_event]).unwrap();
 
@@ -510,7 +531,9 @@ mod tests {
         for i in 0..5 {
             let mut event = SeismicEvent::test_event();
             event.id = format!("test_{}", i);
-            event.time = event.time + chrono::TimeDelta::seconds(i as i64);
+            let time_delta = chrono::TimeDelta::seconds(i as i64);
+            event.time = event.time + time_delta;
+            event.last_update = event.last_update + time_delta;
             events.push(event);
         }
 

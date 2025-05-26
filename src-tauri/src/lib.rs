@@ -1,6 +1,7 @@
 mod analytics;
 mod client;
 mod commands;
+mod error;
 mod seismic;
 mod state;
 
