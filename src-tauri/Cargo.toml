@@ -37,3 +37,4 @@ dashmap = "6.1"
 parking_lot = "0.12"
 rand = "0.8"
 tokio = { version = "1", features = ["full"] }
+rayon = "1.8"

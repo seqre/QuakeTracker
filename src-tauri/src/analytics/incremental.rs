@@ -5,6 +5,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use dashmap::DashMap;
 use parking_lot::RwLock;
 use polars::prelude::*;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::analytics::processors::{
@@ -163,11 +164,7 @@ impl IncrementalAnalytics {
             self.event_index.insert(event.id.clone(), start_index + i);
         }
 
-        for event in events {
-            for processor in &self.analytics_processors {
-                processor.update(event)?;
-            }
-        }
+        self.update_analytics_parallel(events)?;
 
         {
             let mut cache = self.cache.write();
@@ -176,6 +173,35 @@ impl IncrementalAnalytics {
         }
 
         Ok(())
+    }
+
+    fn update_analytics_parallel(&self, events: &[SeismicEvent]) -> Result<(), PolarsError> {
+        let results: Result<Vec<_>, PolarsError> = self.analytics_processors
+            .par_iter()
+            .map(|processor| {
+                log::debug!("Processing {} events with analytics processor '{}'", events.len(), processor.name());
+                
+                for event in events {
+                    if let Err(e) = processor.update(event) {
+                        log::error!("Failed to update analytics processor '{}': {}", processor.name(), e);
+                        return Err(e);
+                    }
+                }
+                Ok(())
+            })
+            .collect();
+
+        match results {
+            Ok(_) => {
+                log::debug!("Successfully processed {} events across {} analytics processors", 
+                           events.len(), self.analytics_processors.len());
+                Ok(())
+            }
+            Err(e) => {
+                log::error!("Parallel analytics processing failed: {}", e);
+                Err(e)
+            }
+        }
     }
 
     /// Get magnitude distribution
@@ -277,28 +303,41 @@ impl IncrementalAnalytics {
     /// Get advanced analytics using Polars lazy evaluation
     pub fn get_advanced_analytics(&self) -> Result<AdvancedAnalytics, PolarsError> {
         let df = self.dataframe.read();
-        let mut stats = Vec::new();
+        
+        log::debug!("Computing advanced analytics for {} processors in parallel", self.analytics_processors.len());
 
-        for processor in &self.analytics_processors {
-            let lazy_stats = processor.get_auxiliary_stats(&df);
-            let collected_stats = lazy_stats.collect()?;
 
-            let title = if let Ok(title_col) = collected_stats.column("title") {
-                if let Ok(title_str) = title_col.str() {
-                    title_str.get(0).unwrap_or("Unknown").to_string()
+        let stats_results: Result<Vec<_>, PolarsError> = self.analytics_processors
+            .par_iter()
+            .map(|processor| {
+                let lazy_stats = processor.get_auxiliary_stats(&df);
+                let collected_stats = lazy_stats.collect()?;
+
+                let title = if let Ok(title_col) = collected_stats.column("title") {
+                    if let Ok(title_str) = title_col.str() {
+                        title_str.get(0).unwrap_or("Unknown").to_string()
+                    } else {
+                        processor.name().to_string()
+                    }
                 } else {
                     processor.name().to_string()
-                }
-            } else {
-                processor.name().to_string()
-            };
+                };
 
-            let data_df = collected_stats.drop("title").unwrap_or(collected_stats);
-            let data = serde_json::to_value(&data_df)
-                .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+                let data_df = collected_stats.drop("title").unwrap_or(collected_stats);
+                let data = serde_json::to_value(&data_df)
+                    .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
 
-            stats.push(AnalyticsStats { title, data });
-        }
+                Ok(AnalyticsStats { title, data })
+            })
+            .collect();
+
+        let mut stats = match stats_results {
+            Ok(stats) => stats,
+            Err(e) => {
+                log::error!("Failed to compute analytics stats in parallel: {}", e);
+                return Err(e);
+            }
+        };
 
         let regional_analysis = df
             .clone()
@@ -322,6 +361,7 @@ impl IncrementalAnalytics {
             data: regional_data,
         });
 
+        log::debug!("Successfully computed advanced analytics with {} stats sections", stats.len());
         Ok(AdvancedAnalytics { stats })
     }
 
@@ -346,13 +386,30 @@ impl IncrementalAnalytics {
     /// Force a full recomputation of all analytics
     pub fn recompute_all(&self) -> Result<(), PolarsError> {
         let df = self.dataframe.read();
+        
+        log::debug!("Starting parallel recomputation of all analytics processors");
 
-        for processor in &self.analytics_processors {
-            processor.recompute(&df)?;
+
+        let results: Result<Vec<_>, PolarsError> = self.analytics_processors
+            .par_iter()
+            .map(|processor| {
+                log::debug!("Recomputing analytics processor '{}'", processor.name());
+                processor.recompute(&df)
+            })
+            .collect();
+
+        match results {
+            Ok(_) => {
+                log::debug!("Successfully recomputed {} analytics processors in parallel", 
+                           self.analytics_processors.len());
+                self.needs_full_recompute.store(false, Ordering::Relaxed);
+                Ok(())
+            }
+            Err(e) => {
+                log::error!("Parallel analytics recomputation failed: {}", e);
+                Err(e)
+            }
         }
-
-        self.needs_full_recompute.store(false, Ordering::Relaxed);
-        Ok(())
     }
 
     /// Replace the dataframe with a filtered version and rebuild analytics
