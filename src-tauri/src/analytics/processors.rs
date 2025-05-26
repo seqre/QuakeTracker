@@ -186,7 +186,6 @@ impl TemporalPatternsAnalytics {
         let result = counts
             .iter()
             .sorted_by(|a, b| {
-                // Sort by weekday order using num_days_from_monday (Monday = 0)
                 a.0.num_days_from_monday().cmp(&b.0.num_days_from_monday())
             })
             .map(|(weekday, count)| (format!("{:?}", weekday), *count))
@@ -206,25 +205,21 @@ impl AnalyticsProcessor for TemporalPatternsAnalytics {
         let month = event.time.month();
         let weekday = event.time.weekday();
 
-        // Update daily counts
         {
             let mut counts = self.date_counts.write();
             *counts.entry(date).or_insert(0) += 1;
         }
 
-        // Update hourly counts
         {
             let mut hourly = self.hourly_counts.write();
             *hourly.entry(hour).or_insert(0) += 1;
         }
 
-        // Update monthly counts
         {
             let mut monthly = self.monthly_counts.write();
             *monthly.entry(month).or_insert(0) += 1;
         }
 
-        // Update weekly counts
         {
             let mut weekly = self.weekly_counts.write();
             *weekly.entry(weekday).or_insert(0) += 1;
@@ -420,7 +415,6 @@ impl AnalyticsProcessor for GeographicHotspotsAnalytics {
             *regions.entry(event.flynn_region.clone()).or_insert(0) += 1;
         }
 
-        // Simple coordinate clustering (round to 0.5 degree grid)
         let lat_cluster = (event.latitude * 2.0).round() / 2.0;
         let lon_cluster = (event.longitude * 2.0).round() / 2.0;
 
@@ -455,7 +449,6 @@ impl AnalyticsProcessor for GeographicHotspotsAnalytics {
             if let (Some(region), Some(lat), Some(lon)) = (region_opt, lat_opt, lon_opt) {
                 *region_counts.entry(region.to_string()).or_insert(0) += 1;
 
-                // Cluster coordinates to 0.5 degree grid
                 let lat_key = (lat * 2.0).round() as i32;
                 let lon_key = (lon * 2.0).round() as i32;
                 *coordinate_clusters.entry((lat_key, lon_key)).or_insert(0) += 1;
@@ -464,7 +457,6 @@ impl AnalyticsProcessor for GeographicHotspotsAnalytics {
 
         *self.region_counts.write() = region_counts;
 
-        // Convert coordinate clusters back to f64
         let clusters: Vec<(f64, f64, u32)> = coordinate_clusters
             .into_iter()
             .map(|((lat_key, lon_key), count)| (lat_key as f64 / 2.0, lon_key as f64 / 2.0, count))
@@ -550,7 +542,6 @@ impl GutenbergRichterAnalytics {
         let counts = self.magnitude_counts.read();
         let mut result = Vec::new();
 
-        // Calculate cumulative counts (N >= M)
         let mut sorted_mags: Vec<_> = counts.keys().collect();
         sorted_mags.sort();
 
@@ -558,7 +549,6 @@ impl GutenbergRichterAnalytics {
             let magnitude = *mag_key as f64 / 10.0;
             let count = *counts.get(mag_key).unwrap_or(&0);
 
-            // Calculate cumulative count (all earthquakes >= this magnitude)
             let cumulative_count: u32 = sorted_mags
                 .iter()
                 .filter(|&&m| m >= mag_key)
@@ -580,7 +570,6 @@ impl GutenbergRichterAnalytics {
         let completeness_mag = *self.completeness_magnitude.read();
         let completeness_key = (completeness_mag * 10.0) as u32;
 
-        // Use only magnitudes above completeness threshold
         let valid_data: Vec<(f64, f64)> = counts
             .iter()
             .filter(|(&mag_key, &count)| mag_key >= completeness_key && count > 0)
@@ -595,7 +584,6 @@ impl GutenbergRichterAnalytics {
             return;
         }
 
-        // Linear regression: log(N) = a - b*M
         let n = valid_data.len() as f64;
         let sum_m: f64 = valid_data.iter().map(|(m, _)| m).sum();
         let sum_log_n: f64 = valid_data.iter().map(|(_, log_n)| log_n).sum();
@@ -622,7 +610,6 @@ impl AnalyticsProcessor for GutenbergRichterAnalytics {
             *counts.entry(mag_key).or_insert(0) += 1;
         }
 
-        // Recalculate b-value periodically (every 100 events or so)
         if self.magnitude_counts.read().values().sum::<u32>() % 100 == 0 {
             self.calculate_b_value();
         }
@@ -732,10 +719,8 @@ impl RiskAssessmentAnalytics {
             return 0.0;
         }
 
-        // Rate per day
         let rate_per_day = events_above_threshold as f64 / time_span;
 
-        // Poisson probability: P(X >= 1) = 1 - P(X = 0) = 1 - e^(-λt)
         let lambda_t = rate_per_day * days;
         1.0 - (-lambda_t).exp()
     }
@@ -778,7 +763,6 @@ impl AnalyticsProcessor for RiskAssessmentAnalytics {
             *counts.entry(mag_key).or_insert(0) += 1;
         }
 
-        // Add energy
         let energy = Self::magnitude_to_energy(event.magnitude);
         {
             let mut total_energy = self.total_energy_joules.write();
@@ -814,7 +798,6 @@ impl AnalyticsProcessor for RiskAssessmentAnalytics {
             }
         }
 
-        // Calculate time span in days
         let time_span_days = if min_time < max_time {
             (max_time - min_time) as f64 / (1_000_000_000.0 * 86400.0) // nanoseconds to days
         } else {
@@ -864,17 +847,13 @@ mod tests {
     fn test_magnitude_distribution_analytics_comprehensive() {
         let processor = MagnitudeDistributionAnalytics::new();
 
-        // Test empty state
         assert_eq!(processor.get_result().len(), 0);
 
-        // Test name
         assert_eq!(processor.name(), "magnitude_distribution");
 
-        // Test clear
         processor.clear();
         assert_eq!(processor.get_result().len(), 0);
 
-        // Test various magnitudes
         let magnitudes = vec![1.5, 2.0, 2.1, 2.3, 3.0, 3.1, 4.5, 4.7];
         for (i, mag) in magnitudes.iter().enumerate() {
             let mut event = SeismicEvent::test_event();
@@ -886,7 +865,6 @@ mod tests {
         let distribution = processor.get_result();
         assert!(!distribution.is_empty());
 
-        // Check bucketing: 1.4-1.6 -> "1.4", 2.0-2.2 -> "2", 2.2-2.4 -> "2.2", etc.
         let bucket_1_4 = distribution.iter().find(|(mag, _)| mag == "1.4");
         assert!(bucket_1_4.is_some());
         assert_eq!(bucket_1_4.unwrap().1, 1); // 1.5
@@ -899,7 +877,6 @@ mod tests {
         assert!(bucket_2_2.is_some());
         assert_eq!(bucket_2_2.unwrap().1, 1); // 2.3
 
-        // Test sorting
         let mags: Vec<f32> = distribution
             .iter()
             .map(|(mag, _)| mag.parse::<f32>().unwrap())
@@ -913,23 +890,19 @@ mod tests {
     fn test_temporal_patterns_analytics_comprehensive() {
         let processor = TemporalPatternsAnalytics::new();
 
-        // Test empty state
         assert_eq!(processor.get_result().len(), 0);
         assert_eq!(processor.get_daily_counts().len(), 0);
         assert_eq!(processor.get_hourly_distribution().len(), 0);
         assert_eq!(processor.get_monthly_distribution().len(), 0);
         assert_eq!(processor.get_weekly_distribution().len(), 0);
 
-        // Test name
         assert_eq!(processor.name(), "temporal_patterns");
 
-        // Create events with different temporal patterns
         let base_time = DateTime::parse_from_rfc3339("2024-01-15T10:30:00Z")
             .unwrap()
             .with_timezone(&Utc);
 
         let events = vec![
-            // Same day, different hours
             create_test_event_with_params("1", 2.0, 10.0, 35.0, -120.0, base_time, "California"),
             create_test_event_with_params(
                 "2",
@@ -949,7 +922,6 @@ mod tests {
                 base_time + chrono::TimeDelta::hours(12),
                 "California",
             ),
-            // Different day
             create_test_event_with_params(
                 "4",
                 3.0,
@@ -959,7 +931,6 @@ mod tests {
                 base_time + chrono::TimeDelta::days(1),
                 "California",
             ),
-            // Different month
             create_test_event_with_params(
                 "5",
                 3.5,
@@ -969,7 +940,6 @@ mod tests {
                 base_time + chrono::TimeDelta::days(32),
                 "California",
             ),
-            // Different weekday (add 3 days to get different weekday)
             create_test_event_with_params(
                 "6",
                 4.0,
@@ -985,31 +955,23 @@ mod tests {
             processor.update(event).unwrap();
         }
 
-        // Test daily counts
         let daily_counts = processor.get_daily_counts();
         assert!(!daily_counts.is_empty());
         assert!(daily_counts.len() >= 3); // At least 3 different dates
 
-        // Test hourly distribution
         let hourly_dist = processor.get_hourly_distribution();
         assert!(!hourly_dist.is_empty());
 
-        // Check that we have the expected number of unique hours
-        // Events are at: 10:30, 15:30, 22:30, and others at 10:30 (different days)
-        // So we should have events at hours 10, 15, and 22
         let total_events: u32 = hourly_dist.iter().map(|(_, count)| count).sum();
         assert_eq!(total_events, 6); // Total number of events
 
-        // Test monthly distribution
         let monthly_dist = processor.get_monthly_distribution();
         assert!(!monthly_dist.is_empty());
         assert!(monthly_dist.len() >= 2); // January and February
 
-        // Test weekly distribution
         let weekly_dist = processor.get_weekly_distribution();
         assert!(!weekly_dist.is_empty());
 
-        // Check weekday names format
         for (weekday_name, _) in &weekly_dist {
             assert!(matches!(
                 weekday_name.as_str(),
@@ -1017,7 +979,6 @@ mod tests {
             ));
         }
 
-        // Test clear
         processor.clear();
         assert_eq!(processor.get_daily_counts().len(), 0);
         assert_eq!(processor.get_hourly_distribution().len(), 0);
@@ -1029,11 +990,9 @@ mod tests {
     fn test_magnitude_depth_analytics_comprehensive() {
         let processor = MagnitudeDepthAnalytics::new();
 
-        // Test empty state
         assert_eq!(processor.get_result().len(), 0);
         assert_eq!(processor.name(), "magnitude_depth_pairs");
 
-        // Add test events with various magnitude-depth pairs
         let test_pairs = vec![
             (2.0, 5.0),
             (3.5, 15.0),
@@ -1053,7 +1012,6 @@ mod tests {
         let pairs = processor.get_result();
         assert_eq!(pairs.len(), 5);
 
-        // Check that all pairs are preserved
         for (expected_mag, expected_depth) in test_pairs {
             assert!(pairs
                 .iter()
@@ -1061,7 +1019,6 @@ mod tests {
                     && (*depth - expected_depth).abs() < 0.001));
         }
 
-        // Test clear
         processor.clear();
         assert_eq!(processor.get_result().len(), 0);
     }
@@ -1070,12 +1027,10 @@ mod tests {
     fn test_geographic_hotspots_analytics_comprehensive() {
         let processor = GeographicHotspotsAnalytics::new();
 
-        // Test empty state
         assert_eq!(processor.get_region_hotspots().len(), 0);
         assert_eq!(processor.get_coordinate_clusters().len(), 0);
         assert_eq!(processor.name(), "geographic_hotspots");
 
-        // Create events in different regions and coordinates
         let events = vec![
             create_test_event_with_params("1", 2.0, 10.0, 35.0, -120.0, Utc::now(), "California"),
             create_test_event_with_params("2", 2.1, 15.0, 35.1, -120.1, Utc::now(), "California"), /* Same region, close coordinates */
@@ -1088,34 +1043,28 @@ mod tests {
             processor.update(event).unwrap();
         }
 
-        // Test region hotspots
         let region_hotspots = processor.get_region_hotspots();
         assert!(!region_hotspots.is_empty());
 
-        // California should be the top region with 3 events
         let california = region_hotspots
             .iter()
             .find(|(region, _)| region == "California");
         assert!(california.is_some());
         assert_eq!(california.unwrap().1, 3);
 
-        // Check sorting (descending by count)
         for i in 1..region_hotspots.len() {
             assert!(region_hotspots[i - 1].1 >= region_hotspots[i].1);
         }
 
-        // Test coordinate clusters
         let clusters = processor.get_coordinate_clusters();
         assert!(!clusters.is_empty());
 
-        // Should have clusters around California coordinates (35, -120) and others
         let california_cluster = clusters
             .iter()
             .find(|(lat, lon, _)| (*lat - 35.0).abs() < 1.0 && (*lon - (-120.0)).abs() < 1.0);
         assert!(california_cluster.is_some());
-        assert!(california_cluster.unwrap().2 >= 3); // At least 3 events in this cluster
+        assert!(california_cluster.unwrap().2 >= 3);
 
-        // Test clear
         processor.clear();
         assert_eq!(processor.get_region_hotspots().len(), 0);
         assert_eq!(processor.get_coordinate_clusters().len(), 0);
@@ -1125,14 +1074,12 @@ mod tests {
     fn test_gutenberg_richter_analytics_comprehensive() {
         let processor = GutenbergRichterAnalytics::new();
 
-        // Test initial state
         assert_eq!(processor.name(), "gutenberg_richter");
         assert_eq!(processor.get_b_value(), 1.0); // Default b-value
         assert_eq!(processor.get_a_value(), 0.0); // Default a-value
         assert_eq!(processor.get_completeness_magnitude(), 2.0);
         assert_eq!(processor.get_magnitude_frequency_data().len(), 0);
 
-        // Add events with magnitudes following a realistic distribution
         let magnitudes = vec![
             2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, // Many small earthquakes
             3.0, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, // Fewer medium earthquakes
@@ -1148,26 +1095,21 @@ mod tests {
             processor.update(&event).unwrap();
         }
 
-        // Test magnitude frequency data
         let freq_data = processor.get_magnitude_frequency_data();
         assert!(!freq_data.is_empty());
 
-        // Check that cumulative counts decrease with magnitude
         let mut prev_cumulative = u32::MAX;
         for (magnitude, _count, cumulative) in freq_data {
             if magnitude >= 2.0 {
-                // Above completeness threshold
                 assert!(cumulative <= prev_cumulative);
                 prev_cumulative = cumulative;
             }
         }
 
-        // B-value should be calculated (might not be exactly 1.0 due to small dataset)
         let b_value = processor.get_b_value();
         assert!(b_value > 0.0);
         assert!(b_value < 5.0); // Reasonable range
 
-        // Test clear
         processor.clear();
         assert_eq!(processor.get_b_value(), 1.0);
         assert_eq!(processor.get_a_value(), 0.0);
@@ -1178,7 +1120,6 @@ mod tests {
     fn test_risk_assessment_analytics_comprehensive() {
         let processor = RiskAssessmentAnalytics::new();
 
-        // Test initial state
         assert_eq!(processor.name(), "risk_assessment");
         assert_eq!(processor.get_total_energy(), 0.0);
         let (prob_5_30, prob_6_365, prob_7_365, total_energy) = processor.get_risk_metrics();
@@ -1187,7 +1128,6 @@ mod tests {
         assert_eq!(prob_7_365, 0.0);
         assert_eq!(total_energy, 0.0);
 
-        // Add events with various magnitudes
         let magnitudes = vec![2.0, 3.0, 4.0, 5.0, 5.5, 6.0, 6.5];
         let base_time = Utc::now();
 
@@ -1205,37 +1145,29 @@ mod tests {
             processor.update(&event).unwrap();
         }
 
-        // Test energy calculation
         let total_energy = processor.get_total_energy();
         assert!(total_energy > 0.0);
 
-        // Energy should increase significantly with magnitude
-        // Magnitude 6.5 should contribute much more energy than magnitude 2.0
         let energy_2_0 = RiskAssessmentAnalytics::magnitude_to_energy(2.0);
         let energy_6_5 = RiskAssessmentAnalytics::magnitude_to_energy(6.5);
         assert!(energy_6_5 > energy_2_0 * 1000.0); // Much more energy
 
-        // Test probability calculations
         let prob_5_0_30days = processor.probability_magnitude_in_days(5.0, 30.0);
         let prob_6_0_365days = processor.probability_magnitude_in_days(6.0, 365.0);
         let prob_7_0_365days = processor.probability_magnitude_in_days(7.0, 365.0);
 
-        // Probabilities should be between 0 and 1
         assert!(prob_5_0_30days >= 0.0 && prob_5_0_30days <= 1.0);
         assert!(prob_6_0_365days >= 0.0 && prob_6_0_365days <= 1.0);
         assert!(prob_7_0_365days >= 0.0 && prob_7_0_365days <= 1.0);
 
-        // Probability for M>=7.0 should be lower than M>=6.0 (we have no M>=7.0 events)
         assert!(prob_7_0_365days <= prob_6_0_365days);
 
-        // Test risk metrics
         let (prob_5_30, prob_6_365, prob_7_365, energy) = processor.get_risk_metrics();
         assert_eq!(prob_5_30, prob_5_0_30days);
         assert_eq!(prob_6_365, prob_6_0_365days);
         assert_eq!(prob_7_365, prob_7_0_365days);
         assert_eq!(energy, total_energy);
 
-        // Test clear
         processor.clear();
         assert_eq!(processor.get_total_energy(), 0.0);
         let (prob_5_30, prob_6_365, prob_7_365, total_energy) = processor.get_risk_metrics();
@@ -1268,11 +1200,9 @@ mod tests {
         for (processor, expected_name) in processors.iter().zip(expected_names.iter()) {
             assert_eq!(processor.name(), *expected_name);
 
-            // Test that update doesn't panic
             let event = SeismicEvent::test_event();
             assert!(processor.update(&event).is_ok());
 
-            // Test that clear doesn't panic
             processor.clear();
         }
     }
@@ -1281,7 +1211,6 @@ mod tests {
     fn test_weekday_ordering() {
         let processor = TemporalPatternsAnalytics::new();
 
-        // Create events for each day of the week
         let base_time = DateTime::parse_from_rfc3339("2024-01-15T10:00:00Z")
             .unwrap()
             .with_timezone(&Utc); // Monday
@@ -1303,13 +1232,11 @@ mod tests {
         let weekly_dist = processor.get_weekly_distribution();
         assert_eq!(weekly_dist.len(), 7);
 
-        // Check Monday-first ordering
         let expected_order = vec!["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
         for (i, (weekday_name, _)) in weekly_dist.iter().enumerate() {
             assert_eq!(weekday_name, expected_order[i]);
         }
 
-        // Each day should have exactly 1 event
         for (_, count) in weekly_dist {
             assert_eq!(count, 1);
         }
@@ -1319,16 +1246,12 @@ mod tests {
     fn test_coordinate_clustering() {
         let processor = GeographicHotspotsAnalytics::new();
 
-        // Create events with coordinates that should cluster together
         let events = vec![
-            // Cluster 1: Around (35.0, -120.0)
             create_test_event_with_params("1", 2.0, 10.0, 35.0, -120.0, Utc::now(), "California"),
             create_test_event_with_params("2", 2.1, 15.0, 35.1, -120.1, Utc::now(), "California"),
             create_test_event_with_params("3", 2.2, 20.0, 35.2, -120.2, Utc::now(), "California"),
-            // Cluster 2: Around (40.0, -125.0)
             create_test_event_with_params("4", 3.0, 25.0, 40.0, -125.0, Utc::now(), "Oregon"),
             create_test_event_with_params("5", 3.1, 30.0, 40.1, -125.1, Utc::now(), "Oregon"),
-            // Isolated event
             create_test_event_with_params("6", 4.0, 35.0, 50.0, -130.0, Utc::now(), "Alaska"),
         ];
 
@@ -1337,21 +1260,18 @@ mod tests {
         }
 
         let clusters = processor.get_coordinate_clusters();
-        assert!(clusters.len() >= 3); // At least 3 clusters
+        assert!(clusters.len() >= 3);
 
-        // Find the California cluster (should have 3 events)
         let california_cluster = clusters.iter().find(|(lat, lon, count)| {
             (*lat - 35.0).abs() < 1.0 && (*lon - (-120.0)).abs() < 1.0 && *count == 3
         });
         assert!(california_cluster.is_some());
 
-        // Find the Oregon cluster (should have 2 events)
         let oregon_cluster = clusters.iter().find(|(lat, lon, count)| {
             (*lat - 40.0).abs() < 1.0 && (*lon - (-125.0)).abs() < 1.0 && *count == 2
         });
         assert!(oregon_cluster.is_some());
 
-        // Find the Alaska cluster (should have 1 event)
         let alaska_cluster = clusters.iter().find(|(lat, lon, count)| {
             (*lat - 50.0).abs() < 1.0 && (*lon - (-130.0)).abs() < 1.0 && *count == 1
         });
@@ -1360,7 +1280,6 @@ mod tests {
 
     #[test]
     fn test_magnitude_energy_conversion() {
-        // Test the magnitude to energy conversion formula: log10(E) = 11.8 + 1.5*M
 
         let test_cases = vec![
             (2.0, 11.8 + 1.5 * 2.0), // log10(E) = 14.8
@@ -1373,19 +1292,15 @@ mod tests {
             let energy = RiskAssessmentAnalytics::magnitude_to_energy(magnitude);
             let log_energy = energy.log10();
 
-            // Allow small floating point differences
             assert!((log_energy - expected_log_energy).abs() < 0.001);
 
-            // Energy should be positive
             assert!(energy > 0.0);
         }
 
-        // Test that energy increases dramatically with magnitude
         let energy_4 = RiskAssessmentAnalytics::magnitude_to_energy(4.0);
         let energy_5 = RiskAssessmentAnalytics::magnitude_to_energy(5.0);
         let energy_6 = RiskAssessmentAnalytics::magnitude_to_energy(6.0);
 
-        // Each magnitude unit should increase energy by 10^1.5 ≈ 31.6 times
         let ratio_4_to_5 = energy_5 / energy_4;
         let ratio_5_to_6 = energy_6 / energy_5;
 

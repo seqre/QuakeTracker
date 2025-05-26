@@ -93,7 +93,6 @@ pub fn recompute_analytics(state: tauri::State<'_, AppState>) -> Result<(), Stri
         .map_err(|e| format!("Failed to recompute analytics: {}", e))
 }
 
-// Analytics commands for temporal patterns
 #[tauri::command]
 pub fn get_hourly_frequency(state: tauri::State<'_, AppState>) -> Vec<(u32, u32)> {
     analytics::get_hourly_frequency_internal(state.inner())
@@ -109,7 +108,6 @@ pub fn get_weekly_frequency(state: tauri::State<'_, AppState>) -> Vec<(String, u
     analytics::get_weekly_frequency_internal(state.inner())
 }
 
-// Analytics commands for geographic hotspots
 #[tauri::command]
 pub fn get_region_hotspots(state: tauri::State<'_, AppState>) -> Vec<(String, u32)> {
     analytics::get_region_hotspots_internal(state.inner())
@@ -120,7 +118,6 @@ pub fn get_coordinate_clusters(state: tauri::State<'_, AppState>) -> Vec<(f64, f
     analytics::get_coordinate_clusters_internal(state.inner())
 }
 
-// Analytics commands for Gutenberg-Richter analysis
 #[tauri::command]
 pub fn get_b_value(state: tauri::State<'_, AppState>) -> f64 {
     analytics::get_b_value_internal(state.inner())
@@ -131,7 +128,6 @@ pub fn get_magnitude_frequency_data(state: tauri::State<'_, AppState>) -> Vec<(f
     analytics::get_magnitude_frequency_data_internal(state.inner())
 }
 
-// Analytics commands for risk assessment
 #[tauri::command]
 pub fn get_risk_metrics(state: tauri::State<'_, AppState>) -> (f64, f64, f64, f64) {
     analytics::get_risk_metrics_internal(state.inner())

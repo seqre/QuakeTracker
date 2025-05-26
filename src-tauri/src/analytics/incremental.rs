@@ -279,12 +279,10 @@ impl IncrementalAnalytics {
         let df = self.dataframe.read();
         let mut stats = Vec::new();
 
-        // Get auxiliary stats from all processors
         for processor in &self.analytics_processors {
             let lazy_stats = processor.get_auxiliary_stats(&df);
             let collected_stats = lazy_stats.collect()?;
 
-            // Extract title from the dataframe
             let title = if let Ok(title_col) = collected_stats.column("title") {
                 if let Ok(title_str) = title_col.str() {
                     title_str.get(0).unwrap_or("Unknown").to_string()
@@ -295,8 +293,6 @@ impl IncrementalAnalytics {
                 processor.name().to_string()
             };
 
-            // Convert dataframe to JSON using Polars' serde feature, excluding the title
-            // column
             let data_df = collected_stats.drop("title").unwrap_or(collected_stats);
             let data = serde_json::to_value(&data_df)
                 .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
@@ -304,7 +300,6 @@ impl IncrementalAnalytics {
             stats.push(AnalyticsStats { title, data });
         }
 
-        // Add regional analysis (not processor-specific)
         let regional_analysis = df
             .clone()
             .group_by([col("flynn_region")])
@@ -363,13 +358,11 @@ impl IncrementalAnalytics {
     /// Replace the dataframe with a filtered version and rebuild analytics
     /// This is used for cleanup operations to remove old or excess events
     pub fn replace_dataframe_and_rebuild(&self, new_df: LazyFrame) -> Result<(), PolarsError> {
-        // Replace the dataframe
         {
             let mut df_guard = self.dataframe.write();
             *df_guard = new_df;
         }
 
-        // Rebuild the event index
         self.event_index.clear();
         let collected_df = self.dataframe.read().clone().collect()?;
         if let Ok(ids_column) = collected_df.column("unid") {
@@ -382,14 +375,12 @@ impl IncrementalAnalytics {
             }
         }
 
-        // Update cache with new event count
         {
             let mut cache = self.cache.write();
             cache.total_events = collected_df.height();
             cache.last_updated = Utc::now();
         }
 
-        // Clear all analytics processors and recompute
         for processor in &self.analytics_processors {
             processor.clear();
         }
@@ -521,7 +512,6 @@ mod tests {
         assert_eq!(analytics.cache.read().total_events, 1);
         assert!(analytics.event_index.contains_key(&event.id));
 
-        // Test that analytics are working by checking results
         assert!(!analytics.get_magnitude_distribution().is_empty());
         assert!(!analytics.get_count_by_date().is_empty());
         assert!(!analytics.get_mag_depth_pairs().is_empty());
@@ -556,7 +546,6 @@ mod tests {
     fn test_analytics_cache_default() {
         let cache = AnalyticsCache::default();
         assert_eq!(cache.total_events, 0);
-        // last_updated should be recent (within last second)
         let now = Utc::now();
         let diff = now.signed_duration_since(cache.last_updated);
         assert!(diff.num_seconds() < 1);
@@ -567,7 +556,6 @@ mod tests {
         let df = IncrementalAnalytics::empty_df();
         let collected = df.collect().unwrap();
 
-        // Should have all expected columns
         let expected_columns = vec![
             "unid",
             "lat",
@@ -593,7 +581,6 @@ mod tests {
             assert!(column_names.contains(&col_name.to_string()));
         }
 
-        // Should be empty
         assert_eq!(collected.height(), 0);
     }
 
@@ -612,12 +599,10 @@ mod tests {
         assert_eq!(analytics.cache.read().total_events, 3);
         assert_eq!(analytics.event_index.len(), 3);
 
-        // Check that all events are indexed
         for event in &events {
             assert!(analytics.event_index.contains_key(&event.id));
         }
 
-        // Check analytics results
         assert_eq!(analytics.get_magnitude_distribution().len(), 3); // 3 different magnitude buckets
         assert!(!analytics.get_count_by_date().is_empty());
         assert_eq!(analytics.get_mag_depth_pairs().len(), 3);
@@ -640,16 +625,13 @@ mod tests {
         let mut event = SeismicEvent::test_event();
         event.id = "test_event".to_string();
 
-        // Add event first time
         analytics.add_event(&event).unwrap();
         assert_eq!(analytics.cache.read().total_events, 1);
         assert!(!analytics.needs_full_recompute.load(Ordering::Relaxed));
 
-        // Update same event (should trigger recompute flag)
         event.magnitude = 5.0; // Change magnitude
         analytics.add_event(&event).unwrap();
 
-        // Should still have 1 event but recompute flag should be set
         assert_eq!(analytics.cache.read().total_events, 1);
         assert!(analytics.needs_full_recompute.load(Ordering::Relaxed));
     }
@@ -658,7 +640,6 @@ mod tests {
     fn test_recompute_all() {
         let analytics = IncrementalAnalytics::new();
 
-        // Add some events
         let events = vec![
             create_test_event_with_params("1", 2.0, 10.0, 35.0, -120.0, Utc::now(), "California"),
             create_test_event_with_params("2", 3.0, 15.0, 36.0, -121.0, Utc::now(), "Oregon"),
@@ -666,13 +647,11 @@ mod tests {
 
         analytics.add_events(&events).unwrap();
 
-        // Set recompute flag
         analytics
             .needs_full_recompute
             .store(true, Ordering::Relaxed);
         assert!(analytics.needs_full_recompute.load(Ordering::Relaxed));
 
-        // Recompute should clear the flag
         analytics.recompute_all().unwrap();
         assert!(!analytics.needs_full_recompute.load(Ordering::Relaxed));
     }
@@ -681,7 +660,6 @@ mod tests {
     fn test_clear_analytics() {
         let analytics = IncrementalAnalytics::new();
 
-        // Add some events
         let events = vec![
             create_test_event_with_params("1", 2.0, 10.0, 35.0, -120.0, Utc::now(), "California"),
             create_test_event_with_params("2", 3.0, 15.0, 36.0, -121.0, Utc::now(), "Oregon"),
@@ -691,7 +669,6 @@ mod tests {
         assert_eq!(analytics.cache.read().total_events, 2);
         assert_eq!(analytics.event_index.len(), 2);
 
-        // Clear should reset everything
         analytics.clear();
 
         assert_eq!(analytics.cache.read().total_events, 0);
@@ -715,7 +692,6 @@ mod tests {
 
         assert_eq!(collected.height(), 1);
 
-        // Check that event data is correctly stored
         let mag_col = collected.column("mag").unwrap().f64().unwrap();
         assert_eq!(mag_col.get(0), Some(2.5));
 
@@ -733,7 +709,6 @@ mod tests {
     fn test_all_analytics_methods() {
         let analytics = IncrementalAnalytics::new();
 
-        // Create diverse events to test all analytics
         let base_time = DateTime::parse_from_rfc3339("2024-01-15T10:30:00Z")
             .unwrap()
             .with_timezone(&Utc);
@@ -779,12 +754,10 @@ mod tests {
 
         analytics.add_events(&events).unwrap();
 
-        // Test magnitude distribution
         let mag_dist = analytics.get_magnitude_distribution();
         assert!(!mag_dist.is_empty());
         assert_eq!(mag_dist.len(), 5); // 5 different magnitude buckets
 
-        // Test temporal analytics
         let count_by_date = analytics.get_count_by_date();
         assert!(!count_by_date.is_empty());
         assert!(count_by_date.len() >= 3); // At least 3 different dates
@@ -799,11 +772,9 @@ mod tests {
         let weekly_freq = analytics.get_weekly_frequency();
         assert!(!weekly_freq.is_empty());
 
-        // Test magnitude-depth pairs
         let mag_depth_pairs = analytics.get_mag_depth_pairs();
         assert_eq!(mag_depth_pairs.len(), 5);
 
-        // Test geographic analytics
         let region_hotspots = analytics.get_region_hotspots();
         assert!(!region_hotspots.is_empty());
         assert!(region_hotspots.len() >= 4); // At least 4 different regions
@@ -811,14 +782,12 @@ mod tests {
         let coordinate_clusters = analytics.get_coordinate_clusters();
         assert!(!coordinate_clusters.is_empty());
 
-        // Test Gutenberg-Richter analytics
         let b_value = analytics.get_b_value();
         assert!(b_value > 0.0);
 
         let mag_freq_data = analytics.get_magnitude_frequency_data();
         assert!(!mag_freq_data.is_empty());
 
-        // Test risk assessment
         let (prob_5_30, prob_6_365, prob_7_365, total_energy) = analytics.get_risk_metrics();
         assert!(prob_5_30 >= 0.0 && prob_5_30 <= 1.0);
         assert!(prob_6_365 >= 0.0 && prob_6_365 <= 1.0);
@@ -833,7 +802,6 @@ mod tests {
     fn test_advanced_analytics_structure() {
         let analytics = IncrementalAnalytics::new();
 
-        // Add some events
         let events = vec![
             create_test_event_with_params("1", 2.0, 10.0, 35.0, -120.0, Utc::now(), "California"),
             create_test_event_with_params("2", 3.0, 15.0, 36.0, -121.0, Utc::now(), "Oregon"),
@@ -844,16 +812,13 @@ mod tests {
 
         let advanced_analytics = analytics.get_advanced_analytics().unwrap();
 
-        // Should have stats from all processors plus regional analysis
         assert!(advanced_analytics.stats.len() >= 6); // 6 processors + regional analysis
 
-        // Check that each stat has required fields
         for stat in &advanced_analytics.stats {
             assert!(!stat.title.is_empty());
             assert!(stat.data.is_object() || stat.data.is_array());
         }
 
-        // Check for expected analytics titles
         let titles: Vec<&str> = advanced_analytics
             .stats
             .iter()
@@ -882,7 +847,6 @@ mod tests {
         assert!(json_result.is_ok());
         let json_value = json_result.unwrap();
 
-        // Should be a JSON object with stats array
         assert!(json_value.is_object());
         let obj = json_value.as_object().unwrap();
         assert!(obj.contains_key("stats"));
@@ -911,7 +875,6 @@ mod tests {
 
         assert_eq!(df.height(), 1);
 
-        // Check all fields are correctly converted
         assert_eq!(
             df.column("unid").unwrap().str().unwrap().get(0),
             Some("test_123")
@@ -949,7 +912,6 @@ mod tests {
 
         assert_eq!(df.height(), 3);
 
-        // Check that all events are included
         let ids = df.column("unid").unwrap().str().unwrap();
         assert_eq!(ids.get(0), Some("1"));
         assert_eq!(ids.get(1), Some("2"));
@@ -965,7 +927,6 @@ mod tests {
     fn test_recompute_triggers() {
         let analytics = IncrementalAnalytics::new();
 
-        // Add events
         let events = vec![
             create_test_event_with_params("1", 2.0, 10.0, 35.0, -120.0, Utc::now(), "California"),
             create_test_event_with_params("2", 3.0, 15.0, 36.0, -121.0, Utc::now(), "Oregon"),
@@ -973,23 +934,19 @@ mod tests {
 
         analytics.add_events(&events).unwrap();
 
-        // Set recompute flag
         analytics
             .needs_full_recompute
             .store(true, Ordering::Relaxed);
 
-        // Any get method should trigger recompute and clear the flag
         let _ = analytics.get_magnitude_distribution();
         assert!(!analytics.needs_full_recompute.load(Ordering::Relaxed));
 
-        // Set flag again and test with different method
         analytics
             .needs_full_recompute
             .store(true, Ordering::Relaxed);
         let _ = analytics.get_count_by_date();
         assert!(!analytics.needs_full_recompute.load(Ordering::Relaxed));
 
-        // Test with all other methods
         analytics
             .needs_full_recompute
             .store(true, Ordering::Relaxed);
@@ -1062,13 +1019,11 @@ mod tests {
             }),
         };
 
-        // Test serialization
         let serialized = serde_json::to_string(&stats).unwrap();
         assert!(serialized.contains("Test Analytics"));
         assert!(serialized.contains("mean"));
         assert!(serialized.contains("3.5"));
 
-        // Test deserialization
         let deserialized: AnalyticsStats = serde_json::from_str(&serialized).unwrap();
         assert_eq!(deserialized.title, "Test Analytics");
         assert_eq!(deserialized.data["mean"], 3.5);
@@ -1090,18 +1045,15 @@ mod tests {
             ],
         };
 
-        // Test serialization
         let serialized = serde_json::to_string(&advanced_analytics).unwrap();
         assert!(serialized.contains("Test 1"));
         assert!(serialized.contains("Test 2"));
 
-        // Test deserialization
         let deserialized: AdvancedAnalytics = serde_json::from_str(&serialized).unwrap();
         assert_eq!(deserialized.stats.len(), 2);
         assert_eq!(deserialized.stats[0].title, "Test 1");
         assert_eq!(deserialized.stats[1].title, "Test 2");
 
-        // Test to_json method
         let json_value = advanced_analytics.to_json().unwrap();
         assert!(json_value.is_object());
         let obj = json_value.as_object().unwrap();
@@ -1116,7 +1068,6 @@ mod tests {
         let analytics = Arc::new(IncrementalAnalytics::new());
         let mut handles = vec![];
 
-        // Spawn multiple threads to add events concurrently
         for i in 0..5 {
             let analytics_clone = analytics.clone();
             let handle = thread::spawn(move || {
@@ -1134,16 +1085,13 @@ mod tests {
             handles.push(handle);
         }
 
-        // Wait for all threads to complete
         for handle in handles {
             handle.join().unwrap();
         }
 
-        // Check that all events were added
         assert_eq!(analytics.cache.read().total_events, 5);
         assert_eq!(analytics.event_index.len(), 5);
 
-        // Check that analytics work correctly
         let mag_dist = analytics.get_magnitude_distribution();
         assert_eq!(mag_dist.len(), 5); // 5 different magnitudes
     }
@@ -1152,7 +1100,6 @@ mod tests {
     fn test_large_dataset_performance() {
         let analytics = IncrementalAnalytics::new();
 
-        // Create a larger dataset
         let mut events = Vec::new();
         let base_time = Utc::now();
 
@@ -1175,21 +1122,17 @@ mod tests {
             events.push(event);
         }
 
-        // Add all events at once
         let start = std::time::Instant::now();
         analytics.add_events(&events).unwrap();
         let duration = start.elapsed();
 
-        // Should complete reasonably quickly (less than 1 second for 100 events)
         assert!(duration.as_secs() < 1);
 
-        // Verify all analytics work with larger dataset
         assert_eq!(analytics.cache.read().total_events, 100);
         assert!(!analytics.get_magnitude_distribution().is_empty());
         assert!(!analytics.get_count_by_date().is_empty());
         assert_eq!(analytics.get_mag_depth_pairs().len(), 100);
 
-        // Test advanced analytics with larger dataset
         let advanced = analytics.get_advanced_analytics().unwrap();
         assert!(!advanced.stats.is_empty());
     }

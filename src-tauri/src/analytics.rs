@@ -167,7 +167,6 @@ mod test {
         let state = state_with_n_entries_func(5, |index| {
             let mut event = SeismicEvent::test_event();
             event.id.push_str(&index.to_string());
-            // Modify time to create different dates
             event.time = event.time + chrono::TimeDelta::days(index.div_euclid(2) as i64);
             event
         });
@@ -236,21 +235,18 @@ mod test {
         let analytics = result.unwrap();
         assert!(analytics.is_object());
 
-        // Check that the stats array is present and contains expected entries
         let obj = analytics.as_object().unwrap();
         assert!(obj.contains_key("stats"));
 
         let stats = obj.get("stats").unwrap().as_array().unwrap();
-        assert!(stats.len() >= 4); // At least 3 processors + regional analysis
+        assert!(stats.len() >= 4);
 
-        // Check that each stat has title and data
         for stat in stats {
             let stat_obj = stat.as_object().unwrap();
             assert!(stat_obj.contains_key("title"));
             assert!(stat_obj.contains_key("data"));
         }
 
-        // Check that we have the expected analytics types
         let titles: Vec<String> = stats
             .iter()
             .map(|s| {
@@ -274,33 +270,29 @@ mod test {
     fn test_new_analytics() {
         let state = state_with_n_entries(10);
 
-        // Test frequency trends
         let hourly_freq = get_hourly_frequency_internal(&state);
         assert!(!hourly_freq.is_empty());
 
         let monthly_freq = get_monthly_frequency_internal(&state);
         assert!(!monthly_freq.is_empty());
 
-        // Test geographic hotspots
         let region_hotspots = get_region_hotspots_internal(&state);
         assert!(!region_hotspots.is_empty());
 
         let coordinate_clusters = get_coordinate_clusters_internal(&state);
         assert!(!coordinate_clusters.is_empty());
 
-        // Test Gutenberg-Richter analysis
         let b_value = get_b_value_internal(&state);
-        assert!(b_value > 0.0); // b-value should be positive
+        assert!(b_value > 0.0);
 
         let mag_freq_data = get_magnitude_frequency_data_internal(&state);
         assert!(!mag_freq_data.is_empty());
 
-        // Test risk assessment
         let (prob_5_30, prob_6_365, prob_7_365, total_energy) = get_risk_metrics_internal(&state);
-        assert!(prob_5_30 >= 0.0 && prob_5_30 <= 1.0); // Probability should be between 0 and 1
+        assert!(prob_5_30 >= 0.0 && prob_5_30 <= 1.0);
         assert!(prob_6_365 >= 0.0 && prob_6_365 <= 1.0);
         assert!(prob_7_365 >= 0.0 && prob_7_365 <= 1.0);
-        assert!(total_energy > 0.0); // Should have some energy
+        assert!(total_energy > 0.0);
 
         let energy = get_total_energy_internal(&state);
         assert_eq!(energy, total_energy);
@@ -310,11 +302,9 @@ mod test {
     fn test_weekday_functionality() {
         let state = state_with_n_entries(10);
 
-        // Test new weekday names functionality
         let weekly_freq = get_weekly_frequency_internal(&state);
         assert!(!weekly_freq.is_empty());
 
-        // Check that we get weekday names (not numbers)
         for (weekday_name, _count) in &weekly_freq {
             assert!(matches!(
                 weekday_name.as_str(),
@@ -322,9 +312,7 @@ mod test {
             ));
         }
 
-        // Verify total count is reasonable
         let total_named: u32 = weekly_freq.iter().map(|(_, count)| count).sum();
-        assert_eq!(total_named, 10); // Should match the number of events we
-                                     // created
+        assert_eq!(total_named, 10);
     }
 }

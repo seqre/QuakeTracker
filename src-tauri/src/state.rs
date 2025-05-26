@@ -49,7 +49,6 @@ impl SeismicData {
     pub fn add_or_update_event(&mut self, event: SeismicEvent) -> Result<(), PolarsError> {
         self.analytics.add_event(&event)?;
 
-        // Check if cleanup is needed
         if self.config.auto_cleanup {
             self.maybe_cleanup()?;
         }
@@ -65,7 +64,6 @@ impl SeismicData {
 
         self.analytics.add_events(&events)?;
 
-        // Check if cleanup is needed
         if self.config.auto_cleanup {
             self.maybe_cleanup()?;
         }
@@ -192,14 +190,11 @@ impl SeismicData {
         self.dataframe_to_events(df)
     }
 
-    // Private helper methods
-
     fn maybe_cleanup(&mut self) -> Result<(), PolarsError> {
         let stats = self.get_stats();
         let mut needs_cleanup = false;
         let mut cleanup_reason = String::new();
 
-        // Check if we exceed the maximum event count
         if self.config.max_events > 0 && stats.total_events > self.config.max_events {
             needs_cleanup = true;
             cleanup_reason = format!(
@@ -208,13 +203,11 @@ impl SeismicData {
             );
         }
 
-        // Check if we have events older than retention period
         if self.config.retention_days > 0 {
             let cutoff_time =
                 chrono::Utc::now() - chrono::TimeDelta::days(self.config.retention_days as i64);
             let cutoff_ns = cutoff_time.timestamp_nanos_opt().unwrap_or(0);
 
-            // Check if there are any old events
             let old_events_count = self
                 .analytics
                 .get_dataframe()
@@ -252,7 +245,6 @@ impl SeismicData {
         let old_stats = self.get_stats();
         let mut filtered_df = self.analytics.get_dataframe();
 
-        // Apply retention period filter if configured
         if self.config.retention_days > 0 {
             let cutoff_time =
                 chrono::Utc::now() - chrono::TimeDelta::days(self.config.retention_days as i64);
@@ -260,10 +252,7 @@ impl SeismicData {
             filtered_df = filtered_df.filter(col("time").gt_eq(lit(cutoff_ns)));
         }
 
-        // Apply event count limit if configured
         if self.config.max_events > 0 {
-            // Keep the most recent events by sorting by time descending and taking the
-            // limit
             filtered_df = filtered_df
                 .sort(
                     ["time"],
@@ -272,7 +261,6 @@ impl SeismicData {
                 .limit(self.config.max_events as u32);
         }
 
-        // Replace the dataframe and rebuild analytics
         self.analytics.replace_dataframe_and_rebuild(filtered_df)?;
 
         let new_stats = self.get_stats();
@@ -299,7 +287,6 @@ impl SeismicData {
             return Ok(events);
         }
 
-        // Extract columns
         let ids = df.column("unid")?.str()?;
         let lats = df.column("lat")?.f64()?;
         let lons = df.column("lon")?.f64()?;
@@ -315,7 +302,6 @@ impl SeismicData {
         let authors = df.column("author")?.str()?;
 
         for i in 0..height {
-            // Extract values with proper null handling
             let id = ids.get(i).map(|s| s.to_string()).unwrap_or_default();
             let latitude = lats.get(i).unwrap_or(0.0);
             let longitude = lons.get(i).unwrap_or(0.0);
@@ -336,7 +322,6 @@ impl SeismicData {
             let lastupdate_ns = lastupdates.get(i).unwrap_or(0);
             let author = authors.get(i).map(|s| s.to_string()).unwrap_or_default();
 
-            // Convert timestamps back to DateTime
             let time = chrono::DateTime::from_timestamp_nanos(time_ns);
             let last_update = chrono::DateTime::from_timestamp_nanos(lastupdate_ns);
 
@@ -432,7 +417,6 @@ mod tests {
 
     #[test]
     fn test_cleanup_by_event_count() {
-        // Create config with low max_events for testing
         let config = DataConfig {
             max_events: 3,
             auto_cleanup: true,
@@ -440,23 +424,19 @@ mod tests {
         };
         let mut data = SeismicData::with_config(config);
 
-        // Add 5 events (exceeds max_events of 3)
         let mut events = Vec::new();
         for i in 0..5 {
             let mut event = SeismicEvent::test_event();
             event.id = format!("test_{}", i);
-            // Make events at different times so we can test ordering
             event.time = event.time + chrono::TimeDelta::seconds(i as i64);
             events.push(event);
         }
 
         data.add_events(events).unwrap();
 
-        // Should have been cleaned up to 3 events (the most recent ones)
         let stats = data.get_stats();
         assert_eq!(stats.total_events, 3);
 
-        // Verify the remaining events are the most recent ones
         let remaining_events = data.get_chronological_events().unwrap();
         assert_eq!(remaining_events.len(), 3);
         assert_eq!(remaining_events[0].id, "test_2");
@@ -466,7 +446,6 @@ mod tests {
 
     #[test]
     fn test_cleanup_by_retention_period() {
-        // Create config with short retention period for testing
         let config = DataConfig {
             max_events: 0, // Disable count-based cleanup
             auto_cleanup: true,
@@ -478,19 +457,16 @@ mod tests {
         let old_time = now - chrono::TimeDelta::days(2); // 2 days ago (should be cleaned)
         let recent_time = now - chrono::TimeDelta::hours(12); // 12 hours ago (should be kept)
 
-        // Add old event
         let mut old_event = SeismicEvent::test_event();
         old_event.id = "old_event".to_string();
         old_event.time = old_time;
 
-        // Add recent event
         let mut recent_event = SeismicEvent::test_event();
         recent_event.id = "recent_event".to_string();
         recent_event.time = recent_time;
 
         data.add_events(vec![old_event, recent_event]).unwrap();
 
-        // Should have cleaned up the old event, keeping only the recent one
         let stats = data.get_stats();
         assert_eq!(stats.total_events, 1);
 
@@ -501,7 +477,6 @@ mod tests {
 
     #[test]
     fn test_cleanup_disabled() {
-        // Create config with auto_cleanup disabled
         let config = DataConfig {
             max_events: 2,
             auto_cleanup: false, // Cleanup disabled
@@ -509,7 +484,6 @@ mod tests {
         };
         let mut data = SeismicData::with_config(config);
 
-        // Add 5 events (exceeds max_events, but cleanup is disabled)
         let mut events = Vec::new();
         for i in 0..5 {
             let mut event = SeismicEvent::test_event();
@@ -519,14 +493,12 @@ mod tests {
 
         data.add_events(events).unwrap();
 
-        // Should have all 5 events since cleanup is disabled
         let stats = data.get_stats();
         assert_eq!(stats.total_events, 5);
     }
 
     #[test]
     fn test_manual_cleanup() {
-        // Create config with auto_cleanup disabled
         let config = DataConfig {
             max_events: 3,
             auto_cleanup: false,
@@ -534,7 +506,6 @@ mod tests {
         };
         let mut data = SeismicData::with_config(config);
 
-        // Add 5 events
         let mut events = Vec::new();
         for i in 0..5 {
             let mut event = SeismicEvent::test_event();
@@ -545,14 +516,11 @@ mod tests {
 
         data.add_events(events).unwrap();
 
-        // Should have all 5 events since auto_cleanup is disabled
         let stats = data.get_stats();
         assert_eq!(stats.total_events, 5);
 
-        // Manually trigger cleanup
         data.maybe_cleanup().unwrap();
 
-        // Should now have only 3 events
         let stats = data.get_stats();
         assert_eq!(stats.total_events, 3);
     }
@@ -561,7 +529,6 @@ mod tests {
     fn test_config_update() {
         let mut data = SeismicData::new();
 
-        // Add some events
         let mut events = Vec::new();
         for i in 0..5 {
             let mut event = SeismicEvent::test_event();
@@ -573,7 +540,6 @@ mod tests {
         let stats = data.get_stats();
         assert_eq!(stats.total_events, 5);
 
-        // Update config to limit events
         let new_config = DataConfig {
             max_events: 3,
             auto_cleanup: false, // Don't auto-cleanup on config change
@@ -581,11 +547,9 @@ mod tests {
         };
         data.update_config(new_config);
 
-        // Events should still be there since auto_cleanup is false
         let stats = data.get_stats();
         assert_eq!(stats.total_events, 5);
 
-        // But manual cleanup should now respect the new limit
         data.maybe_cleanup().unwrap();
         let stats = data.get_stats();
         assert_eq!(stats.total_events, 3);
@@ -595,26 +559,21 @@ mod tests {
     fn test_memory_usage_estimate() {
         let mut data = SeismicData::new();
 
-        // Initially should have 0 memory usage
         let stats = data.get_stats();
         assert_eq!(stats.memory_usage_estimate, 0);
 
-        // Add an event
         data.add_or_update_event(SeismicEvent::test_event())
             .unwrap();
 
-        // Should have some memory usage estimate
         let stats = data.get_stats();
         assert!(stats.memory_usage_estimate > 0);
         assert_eq!(stats.memory_usage_estimate, 500); // 1 event * 500 bytes
-                                                      // estimate
     }
 
     #[test]
     fn test_replace_dataframe_and_rebuild() {
         let analytics = crate::analytics::incremental::IncrementalAnalytics::new();
 
-        // Add some events
         let mut events = Vec::new();
         for i in 0..5 {
             let mut event = SeismicEvent::test_event();
@@ -624,7 +583,6 @@ mod tests {
         }
         analytics.add_events(&events).unwrap();
 
-        // Verify initial state
         let initial_stats = analytics.cache.read();
         assert_eq!(initial_stats.total_events, 5);
         drop(initial_stats);
@@ -632,15 +590,12 @@ mod tests {
         let initial_mag_dist = analytics.get_magnitude_distribution();
         assert_eq!(initial_mag_dist.len(), 5);
 
-        // Create a filtered dataframe (keep only events with magnitude >= 4.0)
         let filtered_df = analytics.get_dataframe().filter(col("mag").gt_eq(lit(4.0)));
 
-        // Replace dataframe and rebuild
         analytics
             .replace_dataframe_and_rebuild(filtered_df)
             .unwrap();
 
-        // Verify the dataframe was replaced and analytics rebuilt
         let final_stats = analytics.cache.read();
         assert_eq!(final_stats.total_events, 3); // Only events with mag >= 4.0 (4.0, 5.0, 6.0)
         drop(final_stats);
@@ -648,7 +603,6 @@ mod tests {
         let final_mag_dist = analytics.get_magnitude_distribution();
         assert_eq!(final_mag_dist.len(), 3);
 
-        // Verify the correct events remain
         let remaining_events = analytics.get_dataframe().collect().unwrap();
         let mags = remaining_events.column("mag").unwrap().f64().unwrap();
         for mag_opt in mags.iter() {
