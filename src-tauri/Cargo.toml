@@ -35,6 +35,5 @@ itertools = "0.14"
 polars = { version = "0.46", features = ["json", "lazy", "temporal", "dtype-datetime", "serde"] }
 dashmap = "6.1"
 parking_lot = "0.12"
-rand = "0.8"
 tokio = { version = "1", features = ["full"] }
 rayon = "1.8"
