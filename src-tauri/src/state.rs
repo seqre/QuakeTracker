@@ -610,7 +610,7 @@ mod tests {
         assert_eq!(initial_stats.total_events, 5);
         drop(initial_stats);
 
-        let initial_mag_dist = analytics.get_magnitude_distribution();
+        let initial_mag_dist = analytics.get_magnitude_distribution().unwrap();
         assert_eq!(initial_mag_dist.len(), 5);
 
         let filtered_df = analytics.get_dataframe().filter(col("mag").gt_eq(lit(4.0)));
@@ -623,7 +623,7 @@ mod tests {
         assert_eq!(final_stats.total_events, 3); // Only events with mag >= 4.0 (4.0, 5.0, 6.0)
         drop(final_stats);
 
-        let final_mag_dist = analytics.get_magnitude_distribution();
+        let final_mag_dist = analytics.get_magnitude_distribution().unwrap();
         assert_eq!(final_mag_dist.len(), 3);
 
         let remaining_events = analytics.get_dataframe().collect().unwrap();

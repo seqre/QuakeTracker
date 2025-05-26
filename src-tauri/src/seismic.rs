@@ -83,7 +83,7 @@ impl SeismicEvent {
 
         let cursor = Cursor::new(js);
 
-        geojson::de::deserialize_single_feature(cursor).unwrap()
+        geojson::de::deserialize_single_feature(cursor).expect("Failed to deserialize test event")
     }
 }
 

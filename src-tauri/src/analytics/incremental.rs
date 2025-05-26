@@ -176,14 +176,23 @@ impl IncrementalAnalytics {
     }
 
     fn update_analytics_parallel(&self, events: &[SeismicEvent]) -> Result<(), PolarsError> {
-        let results: Result<Vec<_>, PolarsError> = self.analytics_processors
+        let results: Result<Vec<_>, PolarsError> = self
+            .analytics_processors
             .par_iter()
             .map(|processor| {
-                log::debug!("Processing {} events with analytics processor '{}'", events.len(), processor.name());
-                
+                log::debug!(
+                    "Processing {} events with analytics processor '{}'",
+                    events.len(),
+                    processor.name()
+                );
+
                 for event in events {
                     if let Err(e) = processor.update(event) {
-                        log::error!("Failed to update analytics processor '{}': {}", processor.name(), e);
+                        log::error!(
+                            "Failed to update analytics processor '{}': {}",
+                            processor.name(),
+                            e
+                        );
                         return Err(e);
                     }
                 }
@@ -193,8 +202,11 @@ impl IncrementalAnalytics {
 
         match results {
             Ok(_) => {
-                log::debug!("Successfully processed {} events across {} analytics processors", 
-                           events.len(), self.analytics_processors.len());
+                log::debug!(
+                    "Successfully processed {} events across {} analytics processors",
+                    events.len(),
+                    self.analytics_processors.len()
+                );
                 Ok(())
             }
             Err(e) => {
@@ -205,9 +217,9 @@ impl IncrementalAnalytics {
     }
 
     /// Get magnitude distribution
-    pub fn get_magnitude_distribution(&self) -> Vec<(String, u32)> {
+    pub fn get_magnitude_distribution(&self) -> Result<Vec<(String, u32)>, String> {
         if self.needs_full_recompute.load(Ordering::Relaxed) {
-            self.recompute_all().ok();
+            self.recompute_all().map_err(|e| e.to_string())?;
         }
         self.magnitude_distribution.get_result()
     }
@@ -303,11 +315,14 @@ impl IncrementalAnalytics {
     /// Get advanced analytics using Polars lazy evaluation
     pub fn get_advanced_analytics(&self) -> Result<AdvancedAnalytics, PolarsError> {
         let df = self.dataframe.read();
-        
-        log::debug!("Computing advanced analytics for {} processors in parallel", self.analytics_processors.len());
 
+        log::debug!(
+            "Computing advanced analytics for {} processors in parallel",
+            self.analytics_processors.len()
+        );
 
-        let stats_results: Result<Vec<_>, PolarsError> = self.analytics_processors
+        let stats_results: Result<Vec<_>, PolarsError> = self
+            .analytics_processors
             .par_iter()
             .map(|processor| {
                 let lazy_stats = processor.get_auxiliary_stats(&df);
@@ -361,7 +376,10 @@ impl IncrementalAnalytics {
             data: regional_data,
         });
 
-        log::debug!("Successfully computed advanced analytics with {} stats sections", stats.len());
+        log::debug!(
+            "Successfully computed advanced analytics with {} stats sections",
+            stats.len()
+        );
         Ok(AdvancedAnalytics { stats })
     }
 
@@ -386,11 +404,11 @@ impl IncrementalAnalytics {
     /// Force a full recomputation of all analytics
     pub fn recompute_all(&self) -> Result<(), PolarsError> {
         let df = self.dataframe.read();
-        
+
         log::debug!("Starting parallel recomputation of all analytics processors");
 
-
-        let results: Result<Vec<_>, PolarsError> = self.analytics_processors
+        let results: Result<Vec<_>, PolarsError> = self
+            .analytics_processors
             .par_iter()
             .map(|processor| {
                 log::debug!("Recomputing analytics processor '{}'", processor.name());
@@ -400,8 +418,10 @@ impl IncrementalAnalytics {
 
         match results {
             Ok(_) => {
-                log::debug!("Successfully recomputed {} analytics processors in parallel", 
-                           self.analytics_processors.len());
+                log::debug!(
+                    "Successfully recomputed {} analytics processors in parallel",
+                    self.analytics_processors.len()
+                );
                 self.needs_full_recompute.store(false, Ordering::Relaxed);
                 Ok(())
             }
@@ -554,7 +574,7 @@ mod tests {
     #[test]
     fn test_incremental_analytics_creation() {
         let analytics = IncrementalAnalytics::new();
-        assert_eq!(analytics.get_magnitude_distribution().len(), 0);
+        assert_eq!(analytics.get_magnitude_distribution().unwrap().len(), 0);
         assert_eq!(analytics.get_count_by_date().len(), 0);
         assert_eq!(analytics.get_mag_depth_pairs().len(), 0);
     }
@@ -569,7 +589,7 @@ mod tests {
         assert_eq!(analytics.cache.read().total_events, 1);
         assert!(analytics.event_index.contains_key(&event.id));
 
-        assert!(!analytics.get_magnitude_distribution().is_empty());
+        assert!(!analytics.get_magnitude_distribution().unwrap().is_empty());
         assert!(!analytics.get_count_by_date().is_empty());
         assert!(!analytics.get_mag_depth_pairs().is_empty());
     }
@@ -588,7 +608,7 @@ mod tests {
         event.magnitude = 3.0;
         processor.update(&event).unwrap();
 
-        let distribution = processor.get_result();
+        let distribution = processor.get_result().unwrap();
         assert!(!distribution.is_empty());
 
         assert!(distribution
@@ -660,7 +680,7 @@ mod tests {
             assert!(analytics.event_index.contains_key(&event.id));
         }
 
-        assert_eq!(analytics.get_magnitude_distribution().len(), 3); // 3 different magnitude buckets
+        assert_eq!(analytics.get_magnitude_distribution().unwrap().len(), 3); // 3 different magnitude buckets
         assert!(!analytics.get_count_by_date().is_empty());
         assert_eq!(analytics.get_mag_depth_pairs().len(), 3);
     }
@@ -730,7 +750,7 @@ mod tests {
 
         assert_eq!(analytics.cache.read().total_events, 0);
         assert_eq!(analytics.event_index.len(), 0);
-        assert_eq!(analytics.get_magnitude_distribution().len(), 0);
+        assert_eq!(analytics.get_magnitude_distribution().unwrap().len(), 0);
         assert_eq!(analytics.get_count_by_date().len(), 0);
         assert_eq!(analytics.get_mag_depth_pairs().len(), 0);
         assert!(!analytics.needs_full_recompute.load(Ordering::Relaxed));
@@ -811,7 +831,7 @@ mod tests {
 
         analytics.add_events(&events).unwrap();
 
-        let mag_dist = analytics.get_magnitude_distribution();
+        let mag_dist = analytics.get_magnitude_distribution().unwrap();
         assert!(!mag_dist.is_empty());
         assert_eq!(mag_dist.len(), 5); // 5 different magnitude buckets
 
@@ -995,7 +1015,7 @@ mod tests {
             .needs_full_recompute
             .store(true, Ordering::Relaxed);
 
-        let _ = analytics.get_magnitude_distribution();
+        let _ = analytics.get_magnitude_distribution().unwrap();
         assert!(!analytics.needs_full_recompute.load(Ordering::Relaxed));
 
         analytics
@@ -1149,7 +1169,7 @@ mod tests {
         assert_eq!(analytics.cache.read().total_events, 5);
         assert_eq!(analytics.event_index.len(), 5);
 
-        let mag_dist = analytics.get_magnitude_distribution();
+        let mag_dist = analytics.get_magnitude_distribution().unwrap();
         assert_eq!(mag_dist.len(), 5); // 5 different magnitudes
     }
 
@@ -1186,7 +1206,7 @@ mod tests {
         assert!(duration.as_secs() < 1);
 
         assert_eq!(analytics.cache.read().total_events, 100);
-        assert!(!analytics.get_magnitude_distribution().is_empty());
+        assert!(!analytics.get_magnitude_distribution().unwrap().is_empty());
         assert!(!analytics.get_count_by_date().is_empty());
         assert_eq!(analytics.get_mag_depth_pairs().len(), 100);
 

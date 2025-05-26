@@ -10,17 +10,17 @@ use crate::client::{ClientResult, QueryParams, WssEvent, SEISMIC_WSS_URL};
 use crate::{analytics, client, AppState};
 
 #[tauri::command]
-pub fn get_magnitude_distribution(state: tauri::State<'_, AppState>) -> Vec<(String, u32)> {
+pub fn get_magnitude_distribution(state: tauri::State<'_, AppState>) -> Result<Vec<(String, u32)>, String> {
     analytics::get_magnitude_distribution_internal(state.inner())
 }
 
 #[tauri::command]
-pub fn get_count_by_year(state: tauri::State<'_, AppState>) -> Vec<(NaiveDate, u32)> {
+pub fn get_count_by_year(state: tauri::State<'_, AppState>) -> Result<Vec<(NaiveDate, u32)>, String> {
     analytics::get_count_by_year_internal(state.inner())
 }
 
 #[tauri::command]
-pub fn get_mag_depth_pairs(state: tauri::State<'_, AppState>) -> Vec<(f64, f64)> {
+pub fn get_mag_depth_pairs(state: tauri::State<'_, AppState>) -> Result<Vec<(f64, f64)>, String> {
     analytics::get_mag_depth_pairs_internal(state.inner())
 }
 
@@ -48,7 +48,8 @@ pub async fn get_seismic_events(
     clear: bool,
 ) -> ClientResult<tauri::ipc::Response> {
     if clear {
-        let mut state = state.lock().unwrap();
+        let mut state = state.lock()
+            .map_err(|e| crate::client::ClientError::Internal(format!("Failed to acquire state lock: {}", e)))?;
         state.clear();
     }
     let events = client::get_seismic_events_internal(state.inner(), query_params).await?;
@@ -176,46 +177,46 @@ pub fn recompute_analytics(state: tauri::State<'_, AppState>) -> Result<(), Stri
 }
 
 #[tauri::command]
-pub fn get_hourly_frequency(state: tauri::State<'_, AppState>) -> Vec<(u32, u32)> {
+pub fn get_hourly_frequency(state: tauri::State<'_, AppState>) -> Result<Vec<(u32, u32)>, String> {
     analytics::get_hourly_frequency_internal(state.inner())
 }
 
 #[tauri::command]
-pub fn get_monthly_frequency(state: tauri::State<'_, AppState>) -> Vec<(u32, u32)> {
+pub fn get_monthly_frequency(state: tauri::State<'_, AppState>) -> Result<Vec<(u32, u32)>, String> {
     analytics::get_monthly_frequency_internal(state.inner())
 }
 
 #[tauri::command]
-pub fn get_weekly_frequency(state: tauri::State<'_, AppState>) -> Vec<(String, u32)> {
+pub fn get_weekly_frequency(state: tauri::State<'_, AppState>) -> Result<Vec<(String, u32)>, String> {
     analytics::get_weekly_frequency_internal(state.inner())
 }
 
 #[tauri::command]
-pub fn get_region_hotspots(state: tauri::State<'_, AppState>) -> Vec<(String, u32)> {
+pub fn get_region_hotspots(state: tauri::State<'_, AppState>) -> Result<Vec<(String, u32)>, String> {
     analytics::get_region_hotspots_internal(state.inner())
 }
 
 #[tauri::command]
-pub fn get_coordinate_clusters(state: tauri::State<'_, AppState>) -> Vec<(f64, f64, u32)> {
+pub fn get_coordinate_clusters(state: tauri::State<'_, AppState>) -> Result<Vec<(f64, f64, u32)>, String> {
     analytics::get_coordinate_clusters_internal(state.inner())
 }
 
 #[tauri::command]
-pub fn get_b_value(state: tauri::State<'_, AppState>) -> f64 {
+pub fn get_b_value(state: tauri::State<'_, AppState>) -> Result<f64, String> {
     analytics::get_b_value_internal(state.inner())
 }
 
 #[tauri::command]
-pub fn get_magnitude_frequency_data(state: tauri::State<'_, AppState>) -> Vec<(f64, u32, u32)> {
+pub fn get_magnitude_frequency_data(state: tauri::State<'_, AppState>) -> Result<Vec<(f64, u32, u32)>, String> {
     analytics::get_magnitude_frequency_data_internal(state.inner())
 }
 
 #[tauri::command]
-pub fn get_risk_metrics(state: tauri::State<'_, AppState>) -> (f64, f64, f64, f64) {
+pub fn get_risk_metrics(state: tauri::State<'_, AppState>) -> Result<(f64, f64, f64, f64), String> {
     analytics::get_risk_metrics_internal(state.inner())
 }
 
 #[tauri::command]
-pub fn get_total_energy(state: tauri::State<'_, AppState>) -> f64 {
+pub fn get_total_energy(state: tauri::State<'_, AppState>) -> Result<f64, String> {
     analytics::get_total_energy_internal(state.inner())
 }

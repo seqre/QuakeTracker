@@ -47,19 +47,26 @@ impl MagnitudeDistributionAnalytics {
         }
     }
 
-    pub fn get_result(&self) -> Vec<(String, u32)> {
+    pub fn get_result(&self) -> Result<Vec<(String, u32)>, String> {
         let buckets = self.buckets.read();
         let mut result: Vec<_> = buckets
             .iter()
             .map(|(bucket, count)| (((*bucket as f32) / 10.0).to_string(), *count))
             .collect();
+        
         result.sort_by(|a, b| {
-            a.0.parse::<f32>()
-                .unwrap()
-                .partial_cmp(&b.0.parse::<f32>().unwrap())
-                .unwrap()
+            let a_val = a.0.parse::<f32>()
+                .map_err(|e| format!("Failed to parse magnitude '{}': {}", a.0, e));
+            let b_val = b.0.parse::<f32>()
+                .map_err(|e| format!("Failed to parse magnitude '{}': {}", b.0, e));
+            
+            match (a_val, b_val) {
+                (Ok(a), Ok(b)) => a.partial_cmp(&b).unwrap_or(std::cmp::Ordering::Equal),
+                _ => std::cmp::Ordering::Equal, // This shouldn't happen with our data
+            }
         });
-        result
+        
+        Ok(result)
     }
 }
 
@@ -847,12 +854,12 @@ mod tests {
     fn test_magnitude_distribution_analytics_comprehensive() {
         let processor = MagnitudeDistributionAnalytics::new();
 
-        assert_eq!(processor.get_result().len(), 0);
+        assert_eq!(processor.get_result().unwrap().len(), 0);
 
         assert_eq!(processor.name(), "magnitude_distribution");
 
         processor.clear();
-        assert_eq!(processor.get_result().len(), 0);
+        assert_eq!(processor.get_result().unwrap().len(), 0);
 
         let magnitudes = vec![1.5, 2.0, 2.1, 2.3, 3.0, 3.1, 4.5, 4.7];
         for (i, mag) in magnitudes.iter().enumerate() {
@@ -862,7 +869,7 @@ mod tests {
             processor.update(&event).unwrap();
         }
 
-        let distribution = processor.get_result();
+        let distribution = processor.get_result().unwrap();
         assert!(!distribution.is_empty());
 
         let bucket_1_4 = distribution.iter().find(|(mag, _)| mag == "1.4");
