@@ -211,21 +211,20 @@ where
         self.map_err(|e| {
             let error = e.into();
             let context_str = format!("[{}:{}]", context.component, context.operation);
-            let info_str = context.additional_info
+            let info_str = context
+                .additional_info
                 .map(|info| format!(" ({})", info))
                 .unwrap_or_default();
-            
+
             // For errors that contain the original error, we can't easily modify them
             // So we'll create new internal errors with context
             match error {
                 QuakeTrackerError::State(msg) => {
                     QuakeTrackerError::State(format!("{} {}{}", context_str, msg, info_str))
                 }
-                other => {
-                    QuakeTrackerError::Internal {
-                        message: format!("{} {}{}", context_str, other, info_str)
-                    }
-                }
+                other => QuakeTrackerError::Internal {
+                    message: format!("{} {}{}", context_str, other, info_str),
+                },
             }
         })
     }
@@ -243,7 +242,10 @@ pub mod validation {
         if magnitude < -2.0 || magnitude > 10.0 {
             return Err(QuakeTrackerError::validation(
                 "magnitude",
-                format!("Magnitude {} is outside valid range [-2.0, 10.0]", magnitude),
+                format!(
+                    "Magnitude {} is outside valid range [-2.0, 10.0]",
+                    magnitude
+                ),
             ));
         }
         Ok(())
@@ -273,7 +275,10 @@ pub mod validation {
         if longitude < -180.0 || longitude > 180.0 {
             return Err(QuakeTrackerError::validation(
                 "longitude",
-                format!("Longitude {} is outside valid range [-180.0, 180.0]", longitude),
+                format!(
+                    "Longitude {} is outside valid range [-180.0, 180.0]",
+                    longitude
+                ),
             ));
         }
         Ok(())
@@ -312,20 +317,22 @@ mod tests {
     fn test_error_context() {
         let result: Result<()> = Err(QuakeTrackerError::state("Test error"));
         let with_context = result.with_operation("test_operation", "test_component");
-        
+
         assert!(with_context.is_err());
         let error = with_context.unwrap_err();
-        assert!(error.to_string().contains("[test_component:test_operation]"));
+        assert!(error
+            .to_string()
+            .contains("[test_component:test_operation]"));
     }
 
     #[test]
     fn test_validation() {
         assert!(validation::validate_magnitude(5.0).is_ok());
         assert!(validation::validate_magnitude(15.0).is_err());
-        
+
         assert!(validation::validate_latitude(45.0).is_ok());
         assert!(validation::validate_latitude(95.0).is_err());
-        
+
         assert!(validation::validate_longitude(120.0).is_ok());
         assert!(validation::validate_longitude(200.0).is_err());
     }
@@ -334,8 +341,8 @@ mod tests {
     fn test_error_conversion() {
         let json_error = serde_json::from_str::<serde_json::Value>("invalid json");
         assert!(json_error.is_err());
-        
+
         let qt_error: QuakeTrackerError = json_error.unwrap_err().into();
         assert_eq!(qt_error.category(), "json");
     }
-} 
+}

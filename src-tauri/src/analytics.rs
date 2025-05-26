@@ -6,22 +6,29 @@ pub mod incremental;
 mod processors;
 
 /// Get magnitude distribution using incremental analytics
-pub(crate) fn get_magnitude_distribution_internal(state: &AppState) -> Result<Vec<(String, u32)>, String> {
-    let state = state.lock()
+pub(crate) fn get_magnitude_distribution_internal(
+    state: &AppState,
+) -> Result<Vec<(String, u32)>, String> {
+    let state = state
+        .lock()
         .map_err(|e| format!("Failed to acquire state lock: {}", e))?;
     state.get_analytics().get_magnitude_distribution()
 }
 
 /// Get count by date using incremental analytics
-pub(crate) fn get_count_by_year_internal(state: &AppState) -> Result<Vec<(NaiveDate, u32)>, String> {
-    let state = state.lock()
+pub(crate) fn get_count_by_year_internal(
+    state: &AppState,
+) -> Result<Vec<(NaiveDate, u32)>, String> {
+    let state = state
+        .lock()
         .map_err(|e| format!("Failed to acquire state lock: {}", e))?;
     Ok(state.get_analytics().get_count_by_date())
 }
 
 /// Get magnitude-depth pairs using incremental analytics
 pub(crate) fn get_mag_depth_pairs_internal(state: &AppState) -> Result<Vec<(f64, f64)>, String> {
-    let state = state.lock()
+    let state = state
+        .lock()
         .map_err(|e| format!("Failed to acquire state lock: {}", e))?;
     Ok(state.get_analytics().get_mag_depth_pairs())
 }
@@ -30,7 +37,8 @@ pub(crate) fn get_mag_depth_pairs_internal(state: &AppState) -> Result<Vec<(f64,
 pub(crate) fn get_advanced_analytics_internal(
     state: &AppState,
 ) -> Result<serde_json::Value, String> {
-    let state = state.lock()
+    let state = state
+        .lock()
         .map_err(|e| format!("Failed to acquire state lock: {}", e))?;
     match state.get_analytics().get_advanced_analytics() {
         Ok(analytics) => analytics.to_json().map_err(|e| e.to_string()),
@@ -40,63 +48,78 @@ pub(crate) fn get_advanced_analytics_internal(
 
 /// Get hourly frequency distribution
 pub(crate) fn get_hourly_frequency_internal(state: &AppState) -> Result<Vec<(u32, u32)>, String> {
-    let state = state.lock()
+    let state = state
+        .lock()
         .map_err(|e| format!("Failed to acquire state lock: {}", e))?;
     Ok(state.get_analytics().get_hourly_frequency())
 }
 
 /// Get monthly frequency distribution
 pub(crate) fn get_monthly_frequency_internal(state: &AppState) -> Result<Vec<(u32, u32)>, String> {
-    let state = state.lock()
+    let state = state
+        .lock()
         .map_err(|e| format!("Failed to acquire state lock: {}", e))?;
     Ok(state.get_analytics().get_monthly_frequency())
 }
 
 /// Get geographic hotspots by region
 pub(crate) fn get_region_hotspots_internal(state: &AppState) -> Result<Vec<(String, u32)>, String> {
-    let state = state.lock()
+    let state = state
+        .lock()
         .map_err(|e| format!("Failed to acquire state lock: {}", e))?;
     Ok(state.get_analytics().get_region_hotspots())
 }
 
 /// Get coordinate clusters for mapping
-pub(crate) fn get_coordinate_clusters_internal(state: &AppState) -> Result<Vec<(f64, f64, u32)>, String> {
-    let state = state.lock()
+pub(crate) fn get_coordinate_clusters_internal(
+    state: &AppState,
+) -> Result<Vec<(f64, f64, u32)>, String> {
+    let state = state
+        .lock()
         .map_err(|e| format!("Failed to acquire state lock: {}", e))?;
     Ok(state.get_analytics().get_coordinate_clusters())
 }
 
 /// Get Gutenberg-Richter b-value
 pub(crate) fn get_b_value_internal(state: &AppState) -> Result<f64, String> {
-    let state = state.lock()
+    let state = state
+        .lock()
         .map_err(|e| format!("Failed to acquire state lock: {}", e))?;
     Ok(state.get_analytics().get_b_value())
 }
 
 /// Get magnitude-frequency relationship data
-pub(crate) fn get_magnitude_frequency_data_internal(state: &AppState) -> Result<Vec<(f64, u32, u32)>, String> {
-    let state = state.lock()
+pub(crate) fn get_magnitude_frequency_data_internal(
+    state: &AppState,
+) -> Result<Vec<(f64, u32, u32)>, String> {
+    let state = state
+        .lock()
         .map_err(|e| format!("Failed to acquire state lock: {}", e))?;
     Ok(state.get_analytics().get_magnitude_frequency_data())
 }
 
 /// Get risk assessment metrics
 pub(crate) fn get_risk_metrics_internal(state: &AppState) -> Result<(f64, f64, f64, f64), String> {
-    let state = state.lock()
+    let state = state
+        .lock()
         .map_err(|e| format!("Failed to acquire state lock: {}", e))?;
     Ok(state.get_analytics().get_risk_metrics())
 }
 
 /// Get total seismic energy released
 pub(crate) fn get_total_energy_internal(state: &AppState) -> Result<f64, String> {
-    let state = state.lock()
+    let state = state
+        .lock()
         .map_err(|e| format!("Failed to acquire state lock: {}", e))?;
     Ok(state.get_analytics().get_total_energy())
 }
 
 /// Get weekly frequency distribution with weekday names
-pub(crate) fn get_weekly_frequency_internal(state: &AppState) -> Result<Vec<(String, u32)>, String> {
-    let state = state.lock()
+pub(crate) fn get_weekly_frequency_internal(
+    state: &AppState,
+) -> Result<Vec<(String, u32)>, String> {
+    let state = state
+        .lock()
         .map_err(|e| format!("Failed to acquire state lock: {}", e))?;
     Ok(state.get_analytics().get_weekly_frequency())
 }
@@ -303,7 +326,8 @@ mod test {
         let mag_freq_data = get_magnitude_frequency_data_internal(&state).unwrap();
         assert!(!mag_freq_data.is_empty());
 
-        let (prob_5_30, prob_6_365, prob_7_365, total_energy) = get_risk_metrics_internal(&state).unwrap();
+        let (prob_5_30, prob_6_365, prob_7_365, total_energy) =
+            get_risk_metrics_internal(&state).unwrap();
         assert!(prob_5_30 >= 0.0 && prob_5_30 <= 1.0);
         assert!(prob_6_365 >= 0.0 && prob_6_365 <= 1.0);
         assert!(prob_7_365 >= 0.0 && prob_7_365 <= 1.0);

@@ -53,19 +53,21 @@ impl MagnitudeDistributionAnalytics {
             .iter()
             .map(|(bucket, count)| (((*bucket as f32) / 10.0).to_string(), *count))
             .collect();
-        
+
         result.sort_by(|a, b| {
-            let a_val = a.0.parse::<f32>()
-                .map_err(|e| format!("Failed to parse magnitude '{}': {}", a.0, e));
-            let b_val = b.0.parse::<f32>()
-                .map_err(|e| format!("Failed to parse magnitude '{}': {}", b.0, e));
-            
+            let a_val =
+                a.0.parse::<f32>()
+                    .map_err(|e| format!("Failed to parse magnitude '{}': {}", a.0, e));
+            let b_val =
+                b.0.parse::<f32>()
+                    .map_err(|e| format!("Failed to parse magnitude '{}': {}", b.0, e));
+
             match (a_val, b_val) {
                 (Ok(a), Ok(b)) => a.partial_cmp(&b).unwrap_or(std::cmp::Ordering::Equal),
                 _ => std::cmp::Ordering::Equal, // This shouldn't happen with our data
             }
         });
-        
+
         Ok(result)
     }
 }
@@ -192,9 +194,7 @@ impl TemporalPatternsAnalytics {
         let counts = self.weekly_counts.read();
         let result = counts
             .iter()
-            .sorted_by(|a, b| {
-                a.0.num_days_from_monday().cmp(&b.0.num_days_from_monday())
-            })
+            .sorted_by(|a, b| a.0.num_days_from_monday().cmp(&b.0.num_days_from_monday()))
             .map(|(weekday, count)| (format!("{:?}", weekday), *count))
             .collect();
         result
@@ -1287,7 +1287,6 @@ mod tests {
 
     #[test]
     fn test_magnitude_energy_conversion() {
-
         let test_cases = vec![
             (2.0, 11.8 + 1.5 * 2.0), // log10(E) = 14.8
             (4.0, 11.8 + 1.5 * 4.0), // log10(E) = 17.8

@@ -48,7 +48,8 @@ impl SeismicData {
 
     /// Add or update a single seismic event
     pub fn add_or_update_event(&mut self, event: SeismicEvent) -> Result<()> {
-        self.analytics.add_event(&event)
+        self.analytics
+            .add_event(&event)
             .with_operation("add_event_to_analytics", "state")?;
 
         if self.config.auto_cleanup {
@@ -65,7 +66,8 @@ impl SeismicData {
             return Ok(());
         }
 
-        self.analytics.add_events(&events)
+        self.analytics
+            .add_events(&events)
             .with_operation("add_events_to_analytics", "state")?;
 
         if self.config.auto_cleanup {
@@ -83,7 +85,10 @@ impl SeismicData {
 
     /// Get all events (expensive operation, use sparingly)
     pub fn get_events(&self) -> Result<Vec<SeismicEvent>> {
-        let df = self.analytics.get_dataframe().collect()
+        let df = self
+            .analytics
+            .get_dataframe()
+            .collect()
             .with_operation("collect_dataframe", "state")?;
         self.dataframe_to_events(df)
             .with_operation("convert_dataframe_to_events", "state")
@@ -106,7 +111,8 @@ impl SeismicData {
     where
         F: Fn(&SeismicEvent) -> T,
     {
-        let events = self.get_events()
+        let events = self
+            .get_events()
             .with_operation("get_events_for_function", "state")?;
         Ok(events.iter().map(func).collect())
     }
@@ -138,7 +144,8 @@ impl SeismicData {
 
     /// Force a full recomputation of all analytics
     pub fn recompute_analytics(&self) -> Result<()> {
-        self.analytics.recompute_all()
+        self.analytics
+            .recompute_all()
             .with_operation("recompute_all_analytics", "state")
     }
 
@@ -192,10 +199,7 @@ impl SeismicData {
     }
 
     /// Get events with magnitude above threshold
-    pub fn get_events_above_magnitude(
-        &self,
-        min_magnitude: f64,
-    ) -> Result<Vec<SeismicEvent>> {
+    pub fn get_events_above_magnitude(&self, min_magnitude: f64) -> Result<Vec<SeismicEvent>> {
         let df = self
             .analytics
             .get_dataframe()
