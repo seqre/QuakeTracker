@@ -11,6 +11,8 @@
   import { getHourlyFrequencyOptions } from "../charts/get_hourly_frequency/options";
   import { getCoordinateClusters } from "../charts/get_coordinate_clusters/options";
   import { world } from '../world';
+  import { getWeeklyFrequencyOptions } from "../charts/get_weekly_frequency/options";
+  import { getMonthlyFrequencyOptions } from "../charts/get_monthly_frequency/options";
 
 
     let {rightSidebar, data} = $props()
@@ -21,6 +23,11 @@
     let chartDom4: HTMLElement;
     let chartDom5: HTMLElement;
     let chartDom6: HTMLElement;
+    let chartDom7: HTMLElement;
+    let chartDom8: HTMLElement;
+
+    let analytics: any = $state(null);
+
 
     let magnitude = $state({});
     let count_by_year = $state({});
@@ -39,6 +46,9 @@
         let chart4 = echarts.init(chartDom4);
         let chart5 = echarts.init(chartDom5);
         let chart6 = echarts.init(chartDom6);
+        let chart7 = echarts.init(chartDom7);
+        let chart8 = echarts.init(chartDom8);
+        
 
         magnitude = await invoke("get_magnitude_distribution");
         const magDistributionOptionObj = magDistributionOption(magnitude);
@@ -64,6 +74,20 @@
         const get_coordinate_clusters = await invoke('get_coordinate_clusters');
         const getCordinatesClusters = getCoordinateClusters(get_coordinate_clusters);
         getCordinatesClusters && chart6.setOption(getCordinatesClusters);
+
+
+        const get_weekly_frequency = await invoke('get_weekly_frequency');
+        const getWeeklyFrequency = getWeeklyFrequencyOptions(get_weekly_frequency);
+        getWeeklyFrequency && chart7.setOption(getWeeklyFrequency);
+
+        const get_monthly_frequency = await invoke('get_monthly_frequency');
+
+        console.error(get_monthly_frequency);
+        const getMonthlyFrequency = getMonthlyFrequencyOptions(get_monthly_frequency);
+        getMonthlyFrequency && chart8.setOption(getMonthlyFrequency);
+
+
+
     })
 
 </script>
@@ -78,6 +102,8 @@
     </button>
 
     <div class=" w-96 overflow-y-scroll">
+
+
         <div class="w-96 pr-2 h-96" bind:this={chartDom2} id="chart2"></div>
 
         <div  class="chart w-96 h-96" bind:this={chartDom} id="chart"></div>
@@ -89,5 +115,9 @@
         <div class="w-96 pr-2 h-96" bind:this={chartDom5} id="chart5"></div>
 
         <div class="w-96 pr-2 h-96" bind:this={chartDom6} id="chart6"></div>
+
+        <div class="w-96 pr-2 h-96" bind:this={chartDom7} id="chart7"></div>
+
+        <div class="w-96 pr-2 h-96" bind:this={chartDom8} id="chart8"></div>
     </div>
 </aside>
