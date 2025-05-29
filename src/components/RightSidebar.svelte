@@ -7,9 +7,11 @@
     import {onMount} from "svelte";
     import {mapToPieRegions} from "../charts/pie-regions/map";
     import {invoke} from "@tauri-apps/api/core";
-  import { get } from "svelte/store";
   import { getCountByYearOptions } from "../charts/get_count_by_year/options";
   import { getHourlyFrequencyOptions } from "../charts/get_hourly_frequency/options";
+  import { getCoordinateClusters } from "../charts/get_coordinate_clusters/options";
+  import { world } from '../world';
+
 
     let {rightSidebar, data} = $props()
 
@@ -18,6 +20,7 @@
     let chartDom3: HTMLElement;
     let chartDom4: HTMLElement;
     let chartDom5: HTMLElement;
+    let chartDom6: HTMLElement;
 
     let magnitude = $state({});
     let count_by_year = $state({});
@@ -26,11 +29,16 @@
     const pieRegionsData = mapToPieRegions(data.features);
 
     onMount(async () => {
+
+        echarts.registerMap('world', world);
+
+
         let chart = echarts.init(chartDom);
         let chart2 = echarts.init(chartDom2);
         let chart3 = echarts.init(chartDom3);
         let chart4 = echarts.init(chartDom4);
         let chart5 = echarts.init(chartDom5);
+        let chart6 = echarts.init(chartDom6);
 
         magnitude = await invoke("get_magnitude_distribution");
         const magDistributionOptionObj = magDistributionOption(magnitude);
@@ -38,6 +46,11 @@
 
         const pieRegionsObj = pieRegions(pieRegionsData);
         pieRegionsObj && chart.setOption(pieRegionsObj);
+
+
+        magDepthPairs = await invoke("get_mag_depth_pairs");
+        const magDepthPairsOptions = magDepthScatterOption(magDepthPairs);
+        magDepthPairsOptions && chart3.setOption(magDepthPairsOptions);
 
         count_by_year = await invoke("get_count_by_year");
         const countByYearOption = getCountByYearOptions(count_by_year);
@@ -47,9 +60,10 @@
         const hourlyFrequencyOption = getHourlyFrequencyOptions(get_hourly_frequency);
         hourlyFrequencyOption && chart5.setOption(hourlyFrequencyOption);
 
-        magDepthPairs = await invoke("get_mag_depth_pairs");
-        const magDepthPairsOptions = magDepthScatterOption(magDepthPairs);
-        magDepthPairsOptions && chart3.setOption(magDepthPairsOptions);
+
+        const get_coordinate_clusters = await invoke('get_coordinate_clusters');
+        const getCordinatesClusters = getCoordinateClusters(get_coordinate_clusters);
+        getCordinatesClusters && chart6.setOption(getCordinatesClusters);
     })
 
 </script>
@@ -73,5 +87,7 @@
         <div class="w-96 pr-2 h-96" bind:this={chartDom4} id="chart4"></div>
 
         <div class="w-96 pr-2 h-96" bind:this={chartDom5} id="chart5"></div>
+
+        <div class="w-96 pr-2 h-96" bind:this={chartDom6} id="chart6"></div>
     </div>
 </aside>
