@@ -2,6 +2,7 @@ export const magDepthScatterOption = (data: any) => {
     return {
         title: {
             text: "Magnitude & depth distribution",
+            left: "center"
         },
         grid: {
             left: "15%",

@@ -2,6 +2,7 @@ export const magDistributionOption = (magnitude: any) => {
     return {
         title: {
             text: "Magnitude distribution",
+            left: "center"
         },
         xAxis: {
             name: "Mag",
