@@ -165,7 +165,7 @@ onclick={() => (settings = !settings)}
 </button>
 
 {#if settings}
-  <div class="mt-2 w-96 max-h-96 overflow-y-auto shadow-lg p-4 rounded bg-white">
+  <div class="mt-2 w-96 max-h-[calc(100vh-6rem)] overflow-y-auto shadow-lg p-4 rounded bg-white">
     <h3 class="text-lg font-semibold mb-4">Query Parameters</h3>
     
     <!-- Time Constraints -->
