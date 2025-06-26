@@ -339,8 +339,7 @@ impl IncrementalAnalytics {
                 };
 
                 let data_df = collected_stats.drop("title").unwrap_or(collected_stats);
-                let data = serde_json::to_value(&data_df)
-                    .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+                let data = dataframe_to_json(&data_df)?;
 
                 Ok(AnalyticsStats { title, data })
             })
@@ -369,8 +368,7 @@ impl IncrementalAnalytics {
             .limit(10)
             .collect()?;
 
-        let regional_data = serde_json::to_value(&regional_analysis)
-            .map_err(|e| PolarsError::ComputeError(e.to_string().into()))?;
+        let regional_data = dataframe_to_json(&regional_analysis)?;
         stats.push(AnalyticsStats {
             title: "Regional Analysis".to_string(),
             data: regional_data,
@@ -560,6 +558,40 @@ impl AdvancedAnalytics {
     pub fn to_json(&self) -> Result<serde_json::Value, String> {
         serde_json::to_value(self).map_err(|e| e.to_string())
     }
+}
+
+fn dataframe_to_json(df: &DataFrame) -> Result<serde_json::Value, PolarsError> {
+    use std::io::Cursor;
+
+    use polars::io::json::{JsonFormat, JsonWriter};
+
+    if df.height() == 0 {
+        return Ok(serde_json::json!({}));
+    }
+
+    let mut df_clone = df.clone();
+
+    let mut buf = Cursor::new(Vec::new());
+    JsonWriter::new(&mut buf)
+        .with_json_format(JsonFormat::Json)
+        .finish(&mut df_clone)?;
+
+    let json_string = String::from_utf8(buf.into_inner()).map_err(|e| {
+        PolarsError::ComputeError(format!("UTF-8 conversion error: {}", e).into())
+    })?;
+
+    let json_value: serde_json::Value = serde_json::from_str(&json_string)
+        .map_err(|e| PolarsError::ComputeError(format!("JSON parsing error: {}", e).into()))?;
+
+    if df.height() == 1 {
+        if let serde_json::Value::Array(arr) = &json_value {
+            if let Some(first_obj) = arr.first() {
+                return Ok(first_obj.clone());
+            }
+        }
+    }
+
+    Ok(json_value)
 }
 
 #[cfg(test)]
