@@ -7,10 +7,6 @@ export const pieRegions = (data: any) => {
     tooltip: {
       trigger: "item",
     },
-    legend: {
-      orient: "vertical",
-      left: "left",
-    },
     series: [
       {
         name: "Access From",

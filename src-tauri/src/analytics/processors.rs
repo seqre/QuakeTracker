@@ -191,13 +191,27 @@ impl TemporalPatternsAnalytics {
 
     /// Get weekly distribution with weekday names
     pub fn get_weekly_distribution(&self) -> Vec<(String, u32)> {
+        use chrono::Weekday;
         let counts = self.weekly_counts.read();
-        let result = counts
+        
+        // Always return all 7 weekdays, even if some have zero counts
+        let all_weekdays = [
+            Weekday::Mon,
+            Weekday::Tue, 
+            Weekday::Wed,
+            Weekday::Thu,
+            Weekday::Fri,
+            Weekday::Sat,
+            Weekday::Sun,
+        ];
+        
+        all_weekdays
             .iter()
-            .sorted_by(|a, b| a.0.num_days_from_monday().cmp(&b.0.num_days_from_monday()))
-            .map(|(weekday, count)| (format!("{:?}", weekday), *count))
-            .collect();
-        result
+            .map(|weekday| {
+                let count = counts.get(weekday).copied().unwrap_or(0);
+                (format!("{:?}", weekday), count)
+            })
+            .collect()
     }
 }
 
