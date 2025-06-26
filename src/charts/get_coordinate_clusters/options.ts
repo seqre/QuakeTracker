@@ -1,7 +1,7 @@
 export const getCoordinateClusters = (data: any) => {
   return {
     title: {
-      text: "Points on World Map",
+      text: "Earthquake Hotspot Clusters",
       subtext: "Using Apache ECharts",
       left: "center",
     },
