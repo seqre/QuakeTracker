@@ -14,6 +14,7 @@
   import { getWeeklyFrequencyOptions } from "../charts/get_weekly_frequency/options";
   import { getMonthlyFrequencyOptions } from "../charts/get_monthly_frequency/options";
   import { magFreqDataFunc } from "../charts/frequneces/options";
+  import AnalyticsTables from "./AnalyticsTables.svelte";
 
   let { rightSidebar, data } = $props();
 
@@ -132,7 +133,7 @@
     const stats = await invoke("get_data_stats");
     console.log("Data statistics:", stats);
 
-    const analytics = await invoke("get_advanced_analytics");
+    analytics = await invoke("get_advanced_analytics");
     console.log("Advanced analytics:", analytics);
 
 
@@ -221,5 +222,7 @@
         </tbody>
       </table>
     </div>
+
+    <AnalyticsTables {analytics} />
   </div>
 </aside>
