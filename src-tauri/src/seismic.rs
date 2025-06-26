@@ -47,6 +47,7 @@ pub struct SeismicEvent {
 }
 
 impl SeismicEvent {
+    #[cfg(test)]
     pub(crate) fn test_event() -> Self {
         let js = r##"
         {
