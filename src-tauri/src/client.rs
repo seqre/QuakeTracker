@@ -55,8 +55,7 @@ pub(crate) async fn get_seismic_events_internal(
     state: &AppState,
     query_params: QueryParams,
 ) -> ClientResult<String> {
-    let result = get_seismic_events_internal_impl(state, query_params).await;
-    result.map_err(|e| e.into())
+    get_seismic_events_internal_impl(state, query_params).await.map_err(|e| e.into())
 }
 
 async fn get_seismic_events_internal_impl(
@@ -74,7 +73,7 @@ async fn get_seismic_events_internal_impl(
         .await
         .with_operation("fetch_events", "emsc_api")?;
 
-    let events = response
+    let events = response.error_for_status()?
         .text()
         .await
         .with_operation("read_response", "emsc_api")?;
@@ -163,10 +162,10 @@ pub struct CircleConstraints {
     #[serde(rename = "lon", skip_serializing_if = "Option::is_none")]
     pub longitude: Option<f32>,
     /// The minimum radius of the circle, in meters
-    #[serde(rename = "minrad", skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "minradius", skip_serializing_if = "Option::is_none")]
     pub min_radius: Option<f32>,
     /// The maximum radius of the circle, in meters
-    #[serde(rename = "maxrad", skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "maxradius", skip_serializing_if = "Option::is_none")]
     pub max_radius: Option<f32>,
 }
 
@@ -203,7 +202,7 @@ pub struct OtherParameters {
     #[serde(rename = "maxmag", skip_serializing_if = "Option::is_none")]
     pub max_magnitude: Option<f32>,
     /// The type of magnitude to use, e.g. "Mw", "ML", "mb"
-    #[serde(rename = "magnitudetype", skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "magtype", skip_serializing_if = "Option::is_none")]
     pub magnitude_type: Option<String>,
     /// Whether to include all event origins
     #[serde(rename = "includeallorigns", skip_serializing_if = "Option::is_none")]
@@ -241,7 +240,7 @@ pub struct Limit(i32);
 
 impl Default for Limit {
     fn default() -> Self {
-        Limit(10)
+        Limit(50)
     }
 }
 

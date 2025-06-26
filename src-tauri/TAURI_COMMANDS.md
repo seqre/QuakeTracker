@@ -26,38 +26,38 @@ Fetches seismic events from the EMSC (European-Mediterranean Seismological Centr
 ```typescript
 interface QueryParams {
   // Time constraints
-  start_time?: string;  // ISO 8601 format
-  end_time?: string;    // ISO 8601 format
+  start?: string;    // ISO 8601 format
+  end?: string;      // ISO 8601 format
   
   // Geographic constraints (bounding box)
-  min_latitude?: number;
-  max_latitude?: number;
-  min_longitude?: number;
-  max_longitude?: number;
+  minlat?: number;
+  maxlat?: number;
+  minlon?: number;
+  maxlon?: number;
   
   // Geographic constraints (circular)
-  latitude?: number;
-  longitude?: number;
-  min_radius?: number;  // meters
-  max_radius?: number;  // meters
+  lat?: number;
+  lon?: number;
+  minradius?: number;  // meters
+  maxradius?: number;  // meters
   
   // Event filters
-  min_depth?: number;      // kilometers
-  max_depth?: number;      // kilometers
-  min_magnitude?: number;
-  max_magnitude?: number;
-  magnitude_type?: string; // "Mw", "ML", "mb", etc.
+  mindepth?: number;      // kilometers
+  maxdepth?: number;      // kilometers
+  minmag?: number;
+  maxmag?: number;
+  magtype?: string;       // "Mw", "ML", "mb", etc.
   
   // Query options
-  limit?: number;          // default: 10
+  limit?: number;               // default: 50
   offset?: number;
-  order_by?: string;       // "time", "time-asc", "magnitude", "magnitude-asc"
+  orderby?: string;             // "time", "time-asc", "magnitude", "magnitude-asc"
   contributor?: string;
   catalog?: string;
-  event_id?: string;
-  updated_after?: string;  // ISO 8601 format
-  include_all_origins?: boolean;
-  include_arrivals?: boolean;
+  eventid?: string;
+  updatedafter?: string;        // ISO 8601 format
+  includeallorigns?: boolean;
+  includearrivals?: boolean;
 }
 ```
 
@@ -67,9 +67,9 @@ import { invoke } from '@tauri-apps/api/tauri';
 
 // Fetch recent earthquakes with magnitude >= 4.0
 const queryParams = {
-  min_magnitude: 4.0,
+  minmag: 4.0,
   limit: 50,
-  order_by: "time"
+  orderby: "time"
 };
 
 try {
