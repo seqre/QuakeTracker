@@ -158,24 +158,24 @@
     <X />
   </button>
 
-  <div class=" w-96 overflow-y-scroll">
-    <div class="w-96 pr-2 h-96" bind:this={chartDom2} id="chart2"></div>
+  <div class=" w-[32rem] overflow-y-scroll">
+    <div class="w-[32rem] pr-2 h-96" bind:this={chartDom2} id="chart2"></div>
 
-    <div class="chart w-96 h-96" bind:this={chartDom} id="chart"></div>
+    <div class="chart w-[32rem] h-96" bind:this={chartDom} id="chart"></div>
 
-    <div class="w-96 pr-2 h-96" bind:this={chartDom3} id="chart3"></div>
+    <div class="w-[32rem] pr-2 h-96" bind:this={chartDom3} id="chart3"></div>
 
-    <div class="w-96 pr-2 h-96" bind:this={chartDom4} id="chart4"></div>
+    <div class="w-[32rem] pr-2 h-96" bind:this={chartDom4} id="chart4"></div>
 
-    <div class="w-96 pr-2 h-96" bind:this={chartDom5} id="chart5"></div>
+    <div class="w-[32rem] pr-2 h-96" bind:this={chartDom5} id="chart5"></div>
 
-    <div class="w-96 pr-2 h-96" bind:this={chartDom6} id="chart6"></div>
+    <div class="w-[32rem] pr-2 h-96" bind:this={chartDom6} id="chart6"></div>
 
-    <div class="w-96 pr-2 h-96" bind:this={chartDom7} id="chart7"></div>
+    <div class="w-[32rem] pr-2 h-96" bind:this={chartDom7} id="chart7"></div>
 
-    <div class="w-96 pr-2 h-96" bind:this={chartDom8} id="chart8"></div>
+    <div class="w-[32rem] pr-2 h-96" bind:this={chartDom8} id="chart8"></div>
 
-    <div class="w-96 pr-2 h-96" bind:this={chartDom9} id="chart9"></div>
+    <div class="w-[32rem] pr-2 h-96" bind:this={chartDom9} id="chart9"></div>
 
     <div class="relative overflow-x-auto mt-6 mx-4">
       <table class="w-full text-sm text-left text-gray-500">

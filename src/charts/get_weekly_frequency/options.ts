@@ -8,9 +8,6 @@ export const getWeeklyFrequencyOptions = (data: any) => {
       left: "center",
       padding: 20,
     },
-    legend: {
-      data: ["Frequency"],
-    },
     radar: {
       // Shape: 'circle', // Optional
       indicator: data.map((item: any) => ({
