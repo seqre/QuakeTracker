@@ -78,7 +78,7 @@ pub async fn listen_to_seismic_events(
     while retry_count < MAX_RETRIES {
         match connect_and_listen(&state, &on_event).await {
             Ok(_) => {
-                log::info!("WebSocket connection closed gracefully");
+                log::debug!("WebSocket connection closed gracefully");
                 return Ok(());
             }
             Err(e) => {
@@ -95,7 +95,7 @@ pub async fn listen_to_seismic_events(
                     return Err(e);
                 }
 
-                log::info!("Retrying in {}ms...", delay);
+                log::debug!("Retrying in {}ms...", delay);
                 sleep(Duration::from_millis(delay)).await;
 
                 // Exponential backoff with cap at 30 seconds
@@ -104,7 +104,7 @@ pub async fn listen_to_seismic_events(
         }
     }
 
-    Err(crate::client::ClientError::Network(
+    Err(client::ClientError::Network(
         "Failed to connect after all retries".to_string(),
     ))
 }
