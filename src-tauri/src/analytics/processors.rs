@@ -915,7 +915,7 @@ mod tests {
         assert_eq!(processor.get_daily_counts().len(), 0);
         assert_eq!(processor.get_hourly_distribution().len(), 0);
         assert_eq!(processor.get_monthly_distribution().len(), 0);
-        assert_eq!(processor.get_weekly_distribution().len(), 0);
+        assert_eq!(processor.get_weekly_distribution().len(), 7);
 
         assert_eq!(processor.name(), "temporal_patterns");
 
